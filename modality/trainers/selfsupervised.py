@@ -113,7 +113,7 @@ class selfsupervised:
             self.logger.print("Training epoch #{}...".format(i_epoch))
             self.model.train()
 
-            for i_iter, sample_batched in tqdm(enumerate(self.dataloaders["val"])):
+            for i_iter, sample_batched in tqdm(enumerate(self.dataloaders["train"])):
 
                 t_st = time.time()
                 self.optimizer.zero_grad()

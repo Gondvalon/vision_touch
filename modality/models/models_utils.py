@@ -64,7 +64,7 @@ def depth_deconv(in_planes, out_planes):
 
 
 def rescaleImage(image, output_size=128, scale=1 / 255.0):
-    """Rescale the image in a sample to a given size.
+    """Normalizes the values within the image to be between 0 and 1 instead of 0 to 255
     Args:
         output_size (tuple or int): Desired output size. If tuple, output is
             matched to output_size. If int, smaller of image edges is matched

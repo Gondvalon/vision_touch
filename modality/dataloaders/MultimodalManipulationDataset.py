@@ -85,6 +85,7 @@ class MultimodalManipulationDataset(Dataset):
                 depth = depth.reshape((128, 128, 1))
 
             flow = np.array(dataset["optical_flow"][dataset_index])
+            # this mask is showing where the sum of the flow is not zero and gets marked with a 1
             flow_mask = np.expand_dims(
                 np.where(
                     flow.sum(axis=2) == 0,
@@ -135,20 +136,25 @@ class MultimodalManipulationDataset(Dataset):
         all_combos = set()
 
         self.paired_filenames = {}
+        # iterate over all files within the dataset folder
         for list_index in tqdm(range(len(self.dataset_path)), desc="pairing_files"):
             filename = self.dataset_path[list_index]
+            # receive number of which part of the data it is
             file_number, _ = self._parse_filename(filename[:-8])
 
+            # get data from one of the files
             dataset = h5py.File(filename, "r", swmr=True, libver="latest")
 
             for idx in range(self.episode_length - self.n_time_steps):
 
                 proprio_dist = None
+                # go on until the first three proprio values of different files have a bigger value than a epsilon
                 while proprio_dist is None or proprio_dist < tolerance:
                     # Get a random idx, file that is not the same as current
                     unpaired_dataset_idx = np.random.randint(self.__len__())
                     unpaired_filename, unpaired_idx, _ = self._idx_to_filename_idx(unpaired_dataset_idx)
 
+                    # go on until unpaired_filename is not filename
                     while unpaired_filename == filename:
                         unpaired_dataset_idx = np.random.randint(self.__len__())
                         unpaired_filename, unpaired_idx, _ = self._idx_to_filename_idx(unpaired_dataset_idx)

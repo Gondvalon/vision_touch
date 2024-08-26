@@ -101,19 +101,15 @@ def augment_val(val_filename_list, filename_list):
     val_filename_list1 = []
 
     for name in tqdm(val_filename_list):
-        filename = name[:-3]
+        filename = name[:-8]
         found = True
-        '''
+
         if filename[-2] == "_":
             file_number = int(filename[-1])
             filename = filename[:-1]
         else:
             file_number = int(filename[-2:])
             filename = filename[:-2]
-            '''
-
-        file_number = int(filename)
-        filename = filename
 
         if file_number < 10:
             comp_number = 19
