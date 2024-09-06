@@ -52,7 +52,7 @@ def crop_video_square(file):
         # generate video from h5
         size = height, height
         # duration = 2
-        fps = 60
+        fps = 30
         # out = cv2.VideoWriter('output.mp4', cv2.VideoWriter_fourcc(*'mp4v'), fps, (size[1], size[0]), False)
         out = cv2.VideoWriter(f'{file}_view.mp4', cv2.VideoWriter_fourcc(*'mp4v'), fps, (size[1], size[0]), True)
         for img in images:
@@ -153,12 +153,115 @@ def list_files_in_directory(directory):
     # print(file_list)
     return file_list
 
+# sorts a dataset video in the correct order and returns a list
+def own_flow(dir):
+    set = '1'
+    files_l = list_files_in_directory(dir)
+    sorted = ['']*20
+    # print(f'This is: {np.array(files_l)}')
+    files = [files_l[0]]
+    for i in range(len(files_l)):
+        filename = files_l[i][:-8]
+        print(f'List: {files_l[i]}')
+        print(f'Filename: {filename}')
+        if filename[-2] == '_':
+            if filename[-3] == set:
+                num = int(filename[-1])
+                sorted[num] = files_l[i]
+        else:
+            if filename[-4] == set:
+                num = int(filename[-2:])
+                sorted[num] = files_l[i]
+
+    print(f'Sorted: {sorted}')
+    i = 0
+    for file in sorted:
+        with h5py.File(file, "r") as f:
+            key = "image"
+            images = f[key][:]
+
+            if i == 0:
+                concat_img = images
+                i +=1
+            else:
+                concat_img = np.concatenate((concat_img, images))
+
+            steps, height, width, channels = images.shape
+
+    vid = calc_optical_flow(concat_img)
+    print(vid.shape)
+    opt_flow = True
+    size = height, height
+    # duration = 2
+    fps = 60
+    save_dir = r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/vid"
+    # out = cv2.VideoWriter('output.mp4', cv2.VideoWriter_fourcc(*'mp4v'), fps, (size[1], size[0]), False)
+    out = cv2.VideoWriter(f'{save_dir}_ownFlow.mp4', cv2.VideoWriter_fourcc(*'mp4v'), fps, (size[1], size[0]), True)
+    if not opt_flow:
+        for img in vid:
+            # data = np.random.randint(0, 256, size, dtype='uint8')
+            # img_swap = np.swapaxes(img, 0, 2)
+            out.write(img)
+    else:
+        for flow in vid:  # flow is of shape (height, width, 2)
+            # Calculate the magnitude and angle of the flow
+            magnitude, angle = cv2.cartToPolar(flow[..., 0], flow[..., 1])
+
+            # Normalize the magnitude to fit into the range [0, 1]
+            magnitude = cv2.normalize(magnitude, None, 0, 1, cv2.NORM_MINMAX)
+
+            # Create an HSV image
+            hsv = np.zeros((height, width, 3), dtype=np.float32)
+            hsv[..., 0] = angle * 180 / np.pi / 2  # Hue (0 - 180)
+            hsv[..., 1] = 1  # Saturation
+            hsv[..., 2] = magnitude  # Value (Brightness)
+
+            # Convert HSV to RGB (or BGR in OpenCV)
+            rgb = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
+
+            # Convert the image back to 8-bit
+            rgb = np.uint8(rgb * 255)
+
+            out.write(rgb)
+    out.release()
+    print(f'vid size: {vid.shape}')
+
+
+
+
+
+def calc_optical_flow(images):
+    # Number of frames
+    num_frames = images.shape[0]
+
+    # Initialize a list to store the optical flow for each pair of frames
+    optical_flows = []
+
+    for i in range(1, num_frames):
+        # Convert frames to grayscale if they are not already
+        prev_frame = cv2.cvtColor(images[i - 1], cv2.COLOR_BGR2GRAY)
+        next_frame = cv2.cvtColor(images[i], cv2.COLOR_BGR2GRAY)
+
+        # Calculate the optical flow using Farneback's method
+        flow = cv2.calcOpticalFlowFarneback(prev_frame, next_frame, None,
+                                            pyr_scale=0.5, levels=3, winsize=15,
+                                            iterations=3, poly_n=5, poly_sigma=1.2,
+                                            flags=0)
+
+        # Append the optical flow to the list
+        optical_flows.append(flow)
+
+    # Convert the list to a numpy array for easier handling
+    optical_flows = np.array(optical_flows)
+    return optical_flows
+
 def concat_vid(dir):
 
     files_l = list_files_in_directory(dir)
-    # print(f'This is: {files_l}')
-    files = [files_l[0]]
-    files = np.concatenate(([files_l[20]], files_l[31:40], files_l[21:31]))
+    # print(f'This is: {np.array(files_l)}')
+    # files = [files_l[0]]
+    # files = np.concatenate(([files_l[20]], files_l[31:40], files_l[21:31]))
+    files = np.concatenate(([files_l[33]], [files_l[29]], [files_l[18]], [files_l[45]], [files_l[5]], [files_l[0]], [files_l[17]]))
     print(files)
     i = 0
     for file in files:
@@ -178,9 +281,9 @@ def concat_vid(dir):
     size = height, height
     # duration = 2
     fps = 60
-    save_dir = r"C:\Rest\Uni\14_SoSe\IRM_Prac_2\triangle_flow"
+    save_dir = r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/vid"
     # out = cv2.VideoWriter('output.mp4', cv2.VideoWriter_fourcc(*'mp4v'), fps, (size[1], size[0]), False)
-    out = cv2.VideoWriter(f'{save_dir}_view.mp4', cv2.VideoWriter_fourcc(*'mp4v'), fps, (size[1], size[0]), True)
+    out = cv2.VideoWriter(f'{save_dir}_Flowview.mp4', cv2.VideoWriter_fourcc(*'mp4v'), fps, (size[1], size[0]), True)
     if not opt_flow:
         for img in vid:
             # data = np.random.randint(0, 256, size, dtype='uint8')
@@ -215,13 +318,16 @@ def concat_vid(dir):
 
 
 if __name__ == "__main__":
-    files = [r"C:\Rest\Uni\14_SoSe\IRM_Prac_2\data_test\triangle_real_data\triangle_real_data\20190408_183047_triangle_0_journal_0_1_1000.h5"]
+    # files = [r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/triangle_data/20190408_183047_triangle_0_journal_1_0_1000.h5"]
+    files = [r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/dataset"]
 
     joint_struc_keys = ['j0', 'j1', 'j2', 'j3', 'j4', 'j5', 'j6']
-    cart_struc_keys = ['x', 'y', 'z']
+    # cart_struc_keys = ['x', 'y', 'z']
     # extract_h5_data(files)
     # plot_joint_values(files[0], "tau", joint_struc_keys)
     # crop_video_square(files[0])
     # concat_vid(r"C:\Rest\Uni\14_SoSe\IRM_Prac_2\data_test\triangle_real_data\triangle_real_data")
-    read_triangle_data(files[0])
+    # concat_vid(files[0])
+    own_flow(r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/triangle_data")
+    # read_triangle_data(files[0])
 

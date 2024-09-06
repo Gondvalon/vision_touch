@@ -5,6 +5,7 @@ import os
 import sys
 
 from tqdm import tqdm
+from scipy.spatial.transform import Rotation as R
 
 class CreateDatasetFromRecord():
     def __init__(self, dataset_dir, recording_dir):
@@ -14,6 +15,8 @@ class CreateDatasetFromRecord():
         self.allow_short_set = True
         # starting index to make the frames square, goes from this index + height
         self.square_idx = 0
+        # frequency which was used to collect the data
+        self.collection_freq = 30
 
         self.dataset_name = 'pegInsert'
         self.num_recordings = 0
@@ -47,13 +50,13 @@ class CreateDatasetFromRecord():
                 # shape of recordings is frames, height, width, channels
                 num_entries = images.shape[0]
                 # there must be 1000 datapoints to create dataset properly
-                if num_entries <= 1000 and not self.allow_short_set:
+                if num_entries <= 1001 and not self.allow_short_set:
                     continue
-                self.num_subfiles = min(num_entries // 50, 20)
+                self.num_subfiles = min((num_entries-1) // 50, 20)
                 print(f'There will get {self.num_subfiles} sub files created')
 
                 # reshape and downsample images
-                images = images[:1001, :, self.square_idx:(self.square_idx + images.shape[1]), :]
+                images = images[:(self.num_subfiles * 50) + 1, :, self.square_idx:(self.square_idx + images.shape[1]), :]
                 downsampled_images = []
                 for frame in images:
                     # Resize the frame using cv2.resize
@@ -61,7 +64,6 @@ class CreateDatasetFromRecord():
                     downsampled_images.append(resized_frame)
 
                 joint_pos_struc = f[self.keys[1]][:]
-                print(f'Shape: {joint_pos_struc[0]}')
                 joint_vel_struc = f[self.keys[2]][:]
                 ee_pos_struc = f[self.keys[3]][:]
                 ee_ori_struc = f[self.keys[4]][:]
@@ -71,7 +73,6 @@ class CreateDatasetFromRecord():
                 joint_vel_ori_l = []
                 ee_pos_l = []
                 ee_ori_l = []
-                print(len(joint_pos_struc['j0']))
                 for j in range(num_entries + 0):
                     joint_pos = [joint_pos_struc['j0'][j], joint_pos_struc['j1'][j], joint_pos_struc['j2'][j], joint_pos_struc['j3'][j],
                                  joint_pos_struc['j4'][j], joint_pos_struc['j5'][j], joint_pos_struc['j6'][j]]
@@ -81,7 +82,6 @@ class CreateDatasetFromRecord():
                     ee_ori = [ee_ori_struc['x'][j], ee_ori_struc['y'][j], ee_ori_struc['z'][j],ee_ori_struc['w'][j]]
 
                     joint_pos_l.append(joint_pos)
-                    # print(f'Shape joints: {joint_pos_l[0].size}')
                     joint_vel_ori_l.append(joint_vel_ori)
                     ee_pos_l.append(ee_pos)
                     ee_ori_l.append(ee_ori)
@@ -89,10 +89,14 @@ class CreateDatasetFromRecord():
                 images = np.array(downsampled_images)
                 joint_pos_np = np.array(joint_pos_l)
                 joint_vel_ori_np = np.array(joint_vel_ori_l)
-                # print(f'Shape joints: {joint_pos_l[0].shape}')
                 ee_pos_np = np.array(ee_pos_l)
                 ee_ori_np = np.array(ee_ori_l)
+                ee_ori_np = ee_ori_np / np.linalg.norm(ee_ori_np, axis=1, keepdims=True)  # Normalize quaternions
+
                 optical_flow_np = self.calc_optical_flow(images)
+
+                ee_vel_np, ee_vel_ori_np = self.calc_ee_velo(ee_pos_np, ee_ori_np)
+                ee_yaw_np, ee_yaw_delta_np = self.calc_yaw(ee_ori_np)
 
                 # iterate over the number of files that shall get created for the dataset
                 for j in range(self.num_subfiles):
@@ -106,9 +110,61 @@ class CreateDatasetFromRecord():
                         h5file.create_dataset('joint_vel_ori', data=joint_vel_ori_np[j * self.data_per_file:(j+1) * self.data_per_file])
                         h5file.create_dataset('ee_pos', data=ee_pos_np[j * self.data_per_file:(j+1) * self.data_per_file])
                         h5file.create_dataset('ee_ori', data=ee_ori_np[j * self.data_per_file:(j+1) * self.data_per_file])
+                        h5file.create_dataset('ee_pos_vel', data=ee_vel_np[j * self.data_per_file:(j + 1) * self.data_per_file])
+                        h5file.create_dataset('ee_vel_ori',data=ee_vel_ori_np[j * self.data_per_file:(j + 1) * self.data_per_file])
+                        h5file.create_dataset('ee_yaw', data=ee_yaw_np[j * self.data_per_file:(j + 1) * self.data_per_file])
+                        h5file.create_dataset('ee_yaw_delta', data=ee_yaw_delta_np[j * self.data_per_file:(j + 1) * self.data_per_file])
+
                         # h5file.create_dataset('dataset2', data=data2, dtype='float64')
 
         print("Dataset successfully created.")
+
+    def calc_yaw(self, ee_ori):
+        # receive yaw and convert back to quaternions
+        rotation = R.from_quat(ee_ori)
+        euler_angles = rotation.as_euler('xyz', degrees=False)
+
+        euler_yaw = np.zeros((len(euler_angles), 3))
+        euler_yaw[:, 2] = euler_angles[:, 2]
+
+        rotation = R.from_euler('xyz', euler_yaw, degrees=False)
+        yaw_quat = rotation.as_quat()  # Output in [x, y, z, w] format
+
+        # calculate the yaw difference and its quaternions
+        euler_yaw_diff = np.diff(euler_yaw, axis=0)
+        rotation = R.from_euler('xyz', euler_yaw_diff, degrees=False)
+        quat_yaw_diff = rotation.as_quat()
+
+        return yaw_quat, quat_yaw_diff
+
+    def calc_ee_velo(self, ee_pos, ee_ori):
+        dt = 1/ self.collection_freq
+
+        # calculate EE linear velocity
+        ee_pos_diff = np.diff(ee_pos, axis=0)
+        ee_pos_vel = ee_pos_diff / dt
+
+        # calculate quaternion velocities
+        # function to compute quaternion difference
+        def quaternion_difference(q1, q2):
+            # Quaternion multiplication q_diff = q1_inverse * q2
+            q1_conj = np.array([-q1[0], -q1[1], -q1[2], q1[3]])  # Conjugate of q1, assuming q1 = [x, y, z, w]
+            q_diff = np.array([
+                q1_conj[3] * q2[0] + q1_conj[0] * q2[3] + q1_conj[1] * q2[2] - q1_conj[2] * q2[1],  # x component
+                q1_conj[3] * q2[1] - q1_conj[0] * q2[2] + q1_conj[1] * q2[3] + q1_conj[2] * q2[0],  # y component
+                q1_conj[3] * q2[2] + q1_conj[0] * q2[1] - q1_conj[1] * q2[0] + q1_conj[2] * q2[3],  # z component
+                q1_conj[3] * q2[3] - q1_conj[0] * q2[0] - q1_conj[1] * q2[1] - q1_conj[2] * q2[2]  # w component
+            ])
+            return q_diff
+
+        quaternion_diffs = np.array(
+            [quaternion_difference(ee_ori[i], ee_ori[i + 1]) for i in range(len(ee_ori) - 1)])
+
+        # due to normalization w can get negelected
+        ee_ori_vel = quaternion_diffs[:, :3] / dt
+
+
+        return ee_pos_vel, ee_ori_vel
 
     def calc_optical_flow(self, images):
         # Number of frames
@@ -141,7 +197,9 @@ class CreateDatasetFromRecord():
 
 
 if __name__ == "__main__":
-    DATASET_DIR = r'C:\Rest\Uni\14_SoSe\IRM_Prac_2\data_test\new_dataset'
-    RECORDING_DIR = r'C:\Rest\Uni\14_SoSe\IRM_Prac_2\data_test'
+    # DATASET_DIR = r'C:\Rest\Uni\14_SoSe\IRM_Prac_2\data_test\new_dataset'
+    # RECORDING_DIR = r'C:\Rest\Uni\14_SoSe\IRM_Prac_2\data_test'
+    RECORDING_DIR = r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/recordings"
+    DATASET_DIR = r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/dataset"
 
     create = CreateDatasetFromRecord(DATASET_DIR, RECORDING_DIR)
