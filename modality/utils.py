@@ -94,7 +94,6 @@ def kl_normal(qm, qv, pm, pv):
     kl = element_wise.sum(-1)
     return kl
 
-# TODO ensure this function fits the style of how we save the files in our dataset
 def augment_val(val_filename_list, filename_list):
 
     filename_list1 = copy.deepcopy(filename_list)

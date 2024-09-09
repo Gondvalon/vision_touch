@@ -13,6 +13,7 @@ from models.base_models.encoders import (
     ForceEncoder,
     ImageEncoder,
     DepthEncoder,
+    TauEncoder,
 )
 from models.base_models.decoders import (
     OpticalFlowDecoder,
@@ -30,6 +31,7 @@ class SensorFusion(nn.Module):
             force:   batch_size x 6 x 32
             proprio: batch_size x 8
             action:  batch_size x action_dim
+            tau:     batch_size x 7
     """
 
     def __init__(
@@ -56,8 +58,9 @@ class SensorFusion(nn.Module):
         # -----------------------
         self.img_encoder = ImageEncoder(self.z_dim)
         self.depth_encoder = DepthEncoder(self.z_dim)
-        self.frc_encoder = ForceEncoder(self.z_dim)
+        # self.frc_encoder = ForceEncoder(self.z_dim)
         self.proprio_encoder = ProprioEncoder(self.z_dim)
+        self.tau_encoder = TauEncoder(self.z_dim)
 
         # -----------------------
         # Action Encoders
@@ -103,7 +106,7 @@ class SensorFusion(nn.Module):
                 m.weight.data.fill_(1)
                 m.bias.data.zero_()
 
-    def forward_encoder(self, vis_in, frc_in, proprio_in, depth_in, action_in):
+    def forward_encoder(self, vis_in, frc_in, proprio_in, depth_in, action_in, tau_in):
 
         # batch size
         batch_dim = vis_in.size()[0]
@@ -114,12 +117,13 @@ class SensorFusion(nn.Module):
         # Get encoded outputs
         img_out, img_out_convs = self.img_encoder(image)
         depth_out, depth_out_convs = self.depth_encoder(depth)
-        frc_out = self.frc_encoder(frc_in)
+        # frc_out = self.frc_encoder(frc_in)
+        tau_out = self.tau_encoder(tau_in)
         proprio_out = self.proprio_encoder(proprio_in)
 
         if self.deterministic:
             # multimodal embedding
-            mm_f1 = torch.cat([img_out, frc_out, proprio_out, depth_out], 1).squeeze()
+            mm_f1 = torch.cat([img_out, tau_out, proprio_out, depth_out], 1).squeeze()
             mm_f2 = self.fusion_fc1(mm_f1)
             z = self.fusion_fc2(mm_f2)
 
@@ -133,16 +137,17 @@ class SensorFusion(nn.Module):
 
             # Modality Mean and Variances
             mu_z_img, var_z_img = gaussian_parameters(img_out, dim=1)
-            mu_z_frc, var_z_frc = gaussian_parameters(frc_out, dim=1)
+            # mu_z_frc, var_z_frc = gaussian_parameters(frc_out, dim=1)
+            mu_z_tau, var_z_tau = gaussian_parameters(tau_out, dim=1)
             mu_z_proprio, var_z_proprio = gaussian_parameters(proprio_out, dim=1)
             mu_z_depth, var_z_depth = gaussian_parameters(depth_out, dim=1)
 
             # Tile distribution parameters using concatonation
             m_vect = torch.cat(
-                [mu_z_img, mu_z_frc, mu_z_proprio, mu_z_depth, mu_prior_resized], dim=2
+                [mu_z_img, mu_z_tau, mu_z_proprio, mu_z_depth, mu_prior_resized], dim=2
             )
             var_vect = torch.cat(
-                [var_z_img, var_z_frc, var_z_proprio, var_z_depth, var_prior_resized],
+                [var_z_img, var_z_tau, var_z_proprio, var_z_depth, var_prior_resized],
                 dim=2,
             )
 
@@ -154,9 +159,9 @@ class SensorFusion(nn.Module):
 
         if self.encoder_bool or action_in is None:
             if self.deterministic:
-                return img_out, frc_out, proprio_out, depth_out, z
+                return img_out, tau_out, proprio_out, depth_out, z
             else:
-                return img_out_convs, img_out, frc_out, proprio_out, depth_out, z
+                return img_out_convs, img_out, tau_out, proprio_out, depth_out, z
         else:
             # action embedding
             act_feat = self.action_encoder(action_in)
@@ -186,6 +191,7 @@ class SensorFusionSelfSupervised(SensorFusion):
             force:   batch_size x 6 x 32
             proprio: batch_size x 8
             action:  batch_size x action_dim
+            tau:     batch_size x 7
     """
 
     def __init__(
@@ -235,22 +241,23 @@ class SensorFusionSelfSupervised(SensorFusion):
         proprio_in,
         depth_in,
         action_in,
+        tau_in,
     ):
 
         if self.encoder_bool:
             # returning latent space representation if model is set in encoder mode
-            z = self.forward_encoder(vis_in, frc_in, proprio_in, depth_in, action_in)
+            z = self.forward_encoder(vis_in, frc_in, proprio_in, depth_in, action_in, tau_in)
             return z
 
         elif action_in is None:
-            z = self.forward_encoder(vis_in, frc_in, proprio_in, depth_in, None)
+            z = self.forward_encoder(vis_in, frc_in, proprio_in, depth_in, None, tau_in=tau_in)
             pair_out = self.pair_fc(z)
             return pair_out
 
         else:
             if self.deterministic:
                 img_out_convs, mm_act_feat, z = self.forward_encoder(
-                    vis_in, frc_in, proprio_in, depth_in, action_in
+                    vis_in, frc_in, proprio_in, depth_in, action_in, tau_in
                 )
             else:
                 img_out_convs, mm_act_feat, z, mu_z, var_z, mu_prior, var_prior = self.forward_encoder(
@@ -259,6 +266,7 @@ class SensorFusionSelfSupervised(SensorFusion):
                     proprio_in,
                     depth_in,
                     action_in,
+                    tau_in,
                 )
 
         # ---------------- Training Objectives ----------------

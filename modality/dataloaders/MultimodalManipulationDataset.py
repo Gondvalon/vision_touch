@@ -77,6 +77,7 @@ class MultimodalManipulationDataset(Dataset):
             depth = dataset["depth_data"][dataset_index]
             proprio = dataset["proprio"][dataset_index][:8]
             force = dataset["ee_forces_continuous"][dataset_index]
+            tau = dataset["tau"][dataset_index]
 
             if image.shape[0] == 3:
                 image = np.transpose(image, (2, 1, 0))
@@ -99,6 +100,7 @@ class MultimodalManipulationDataset(Dataset):
             unpaired_depth = depth
             unpaired_proprio = unpaired_dataset["proprio"][unpaired_idx][:8]
             unpaired_force = unpaired_dataset["ee_forces_continuous"][unpaired_idx]
+            unpaired_tau = unpaired_dataset["tau"][unpaired_idx]
 
             sample = {
                 "image": image,
@@ -107,6 +109,7 @@ class MultimodalManipulationDataset(Dataset):
                 "flow_mask": flow_mask,
                 "action": dataset["action"][dataset_index + 1],
                 "force": force,
+                "tau": tau,
                 "proprio": proprio,
                 "ee_yaw_next": dataset["proprio"][dataset_index + 1][:self.action_dim],
                 "contact_next": np.array(
@@ -116,6 +119,7 @@ class MultimodalManipulationDataset(Dataset):
                 "unpaired_force": unpaired_force,
                 "unpaired_proprio": unpaired_proprio,
                 "unpaired_depth": unpaired_depth,
+                "unpaired_tau": unpaired_tau
             }
 
         dataset.close()

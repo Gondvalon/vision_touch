@@ -56,6 +56,27 @@ class ForceEncoder(nn.Module):
     def forward(self, force):
         return self.frc_encoder(force)
 
+class TauEncoder(nn.Module):
+    def __init__(self, z_dim, initailize_weights=True):
+        """
+        Tau encoder taken from selfsupervised code
+        """
+        super().__init__()
+        self.z_dim = z_dim
+
+        self.tau_encoder = nn.Sequential(
+            nn.Linear(7, 64),
+            nn.ReLU(),
+            nn.Linear(64, 32),
+            nn.ReLU()
+        )
+
+        if initailize_weights:
+            init_weights(self.modules())
+
+    def forward(self, tau):
+        return self.tau_encoder(tau).unsqueeze(2)
+
 
 class ImageEncoder(nn.Module):
     def __init__(self, z_dim, initailize_weights=True):
