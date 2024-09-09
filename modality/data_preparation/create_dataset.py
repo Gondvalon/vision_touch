@@ -52,6 +52,8 @@ class CreateDatasetFromRecord():
                 # there must be 1000 datapoints to create dataset properly
                 if num_entries <= 1001 and not self.allow_short_set:
                     continue
+                else:
+                    num_entries = num_entries - 1
                 self.num_subfiles = min((num_entries-1) // 50, 20)
                 print(f'There will get {self.num_subfiles} sub files created')
 
@@ -67,36 +69,48 @@ class CreateDatasetFromRecord():
                 joint_vel_struc = f[self.keys[2]][:]
                 ee_pos_struc = f[self.keys[3]][:]
                 ee_ori_struc = f[self.keys[4]][:]
+                tau_struc = f[self.keys[5]][:]
 
                 # convert structs into np arrays
                 joint_pos_l = []
                 joint_vel_ori_l = []
                 ee_pos_l = []
                 ee_ori_l = []
-                for j in range(num_entries + 0):
+                tau_l = []
+                for j in range(num_entries + 1):
                     joint_pos = [joint_pos_struc['j0'][j], joint_pos_struc['j1'][j], joint_pos_struc['j2'][j], joint_pos_struc['j3'][j],
                                  joint_pos_struc['j4'][j], joint_pos_struc['j5'][j], joint_pos_struc['j6'][j]]
                     joint_vel_ori = [joint_vel_struc['j0'][j], joint_vel_struc['j1'][j], joint_vel_struc['j2'][j], joint_vel_struc['j3'][j],
                                  joint_vel_struc['j4'][j], joint_vel_struc['j5'][j], joint_vel_struc['j6'][j]]
+                    tau = [tau_struc['j0'][j], tau_struc['j1'][j], tau_struc['j2'][j], tau_struc['j3'][j], tau_struc['j4'][j],
+                           tau_struc['j5'][j], tau_struc['j6'][j]]
                     ee_pos = [ee_pos_struc['x'][j], ee_pos_struc['y'][j], ee_pos_struc['z'][j]]
                     ee_ori = [ee_ori_struc['x'][j], ee_ori_struc['y'][j], ee_ori_struc['z'][j],ee_ori_struc['w'][j]]
 
                     joint_pos_l.append(joint_pos)
                     joint_vel_ori_l.append(joint_vel_ori)
+                    tau_l.append(tau)
                     ee_pos_l.append(ee_pos)
                     ee_ori_l.append(ee_ori)
 
                 images = np.array(downsampled_images)
                 joint_pos_np = np.array(joint_pos_l)
                 joint_vel_ori_np = np.array(joint_vel_ori_l)
+                tau_np = np.array(tau_l)
                 ee_pos_np = np.array(ee_pos_l)
                 ee_ori_np = np.array(ee_ori_l)
                 ee_ori_np = ee_ori_np / np.linalg.norm(ee_ori_np, axis=1, keepdims=True)  # Normalize quaternions
 
                 optical_flow_np = self.calc_optical_flow(images)
 
-                ee_vel_np, ee_vel_ori_np = self.calc_ee_velo(ee_pos_np, ee_ori_np)
-                ee_yaw_np, ee_yaw_delta_np = self.calc_yaw(ee_ori_np)
+                ee_vel_np, ee_vel_ori_np, ee_pos_diff = self.calc_ee_velo(ee_pos_np, ee_ori_np)
+                # yaw is in euler angles(radians) while the other two are quaternions
+                yaw_np, yaw_vel_np, yaw_diff_np, ee_yaw_np, ee_yaw_delta_np = self.calc_yaw_data(ee_ori_np)
+
+                # create action and proprioception values
+                action_np = np.hstack((ee_pos_diff, yaw_diff_np))
+                proprio_np = np.hstack((ee_pos_np[:-1], yaw_np[:-1], ee_vel_np, yaw_vel_np))
+
 
                 # iterate over the number of files that shall get created for the dataset
                 for j in range(self.num_subfiles):
@@ -104,6 +118,9 @@ class CreateDatasetFromRecord():
                     filepath = os.path.join(self.dataset_dir, filename)
                     with h5py.File(filepath, 'w') as h5file:
                         # create datasets
+                        h5file.create_dataset('proprio', data=proprio_np[j * self.data_per_file:(j + 1) * self.data_per_file])
+                        h5file.create_dataset('action', data=action_np[j * self.data_per_file:(j + 1) * self.data_per_file])
+                        h5file.create_dataset('tau', data=tau_np[j * self.data_per_file:(j + 1) * self.data_per_file])
                         h5file.create_dataset('image', data=images[j * self.data_per_file:(j+1) * self.data_per_file])
                         h5file.create_dataset('optical_flow', data=optical_flow_np[j * self.data_per_file:(j+1) * self.data_per_file])
                         h5file.create_dataset('joint_pos', data=joint_pos_np[j * self.data_per_file:(j+1) * self.data_per_file])
@@ -119,13 +136,17 @@ class CreateDatasetFromRecord():
 
         print("Dataset successfully created.")
 
-    def calc_yaw(self, ee_ori):
+    def calc_yaw_data(self, ee_ori):
+        dt = 1 / self.collection_freq
+
         # receive yaw and convert back to quaternions
         rotation = R.from_quat(ee_ori)
         euler_angles = rotation.as_euler('xyz', degrees=False)
 
         euler_yaw = np.zeros((len(euler_angles), 3))
         euler_yaw[:, 2] = euler_angles[:, 2]
+        euler_yaw_diff = np.diff(euler_yaw, axis=0)
+        euler_yaw_vel = euler_yaw_diff / dt
 
         rotation = R.from_euler('xyz', euler_yaw, degrees=False)
         yaw_quat = rotation.as_quat()  # Output in [x, y, z, w] format
@@ -135,7 +156,12 @@ class CreateDatasetFromRecord():
         rotation = R.from_euler('xyz', euler_yaw_diff, degrees=False)
         quat_yaw_diff = rotation.as_quat()
 
-        return yaw_quat, quat_yaw_diff
+        # change output shape from (size,) to (size,1)
+        euler_yaw = euler_yaw[:, 2].reshape(-1, 1)
+        euler_yaw_diff = euler_yaw_diff[:,2].reshape(-1, 1)
+        euler_yaw_vel = euler_yaw_vel[: ,2].reshape(-1, 1)
+
+        return euler_yaw, euler_yaw_vel, euler_yaw_diff, yaw_quat, quat_yaw_diff
 
     def calc_ee_velo(self, ee_pos, ee_ori):
         dt = 1/ self.collection_freq
@@ -164,7 +190,7 @@ class CreateDatasetFromRecord():
         ee_ori_vel = quaternion_diffs[:, :3] / dt
 
 
-        return ee_pos_vel, ee_ori_vel
+        return ee_pos_vel, ee_ori_vel, ee_pos_diff
 
     def calc_optical_flow(self, images):
         # Number of frames
@@ -197,9 +223,9 @@ class CreateDatasetFromRecord():
 
 
 if __name__ == "__main__":
-    # DATASET_DIR = r'C:\Rest\Uni\14_SoSe\IRM_Prac_2\data_test\new_dataset'
-    # RECORDING_DIR = r'C:\Rest\Uni\14_SoSe\IRM_Prac_2\data_test'
-    RECORDING_DIR = r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/recordings"
-    DATASET_DIR = r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/dataset"
+    DATASET_DIR = r'C:\Rest\Uni\14_SoSe\IRM_Prac_2\data_test\new_dataset'
+    RECORDING_DIR = r'C:\Rest\Uni\14_SoSe\IRM_Prac_2\data_test'
+    # RECORDING_DIR = r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/recordings"
+    # DATASET_DIR = r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/dataset"
 
     create = CreateDatasetFromRecord(DATASET_DIR, RECORDING_DIR)
