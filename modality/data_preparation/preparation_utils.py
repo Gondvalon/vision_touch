@@ -30,6 +30,54 @@ def plot_joint_values(file, value, struc_keys):
         plt.grid(True)
         plt.show()
 
+def plot_proprio(dir):
+    sorted = sort_set(dir)
+    i = 0
+    for file in sorted:
+        with h5py.File(file, "r") as f:
+            key = 'proprio'
+            proprio = f[key][:]
+            if i == 0:
+                concat_pro = proprio
+                i +=1
+            else:
+                concat_pro = np.concatenate((concat_pro, proprio))
+
+    print(f'Proprio Shape: {concat_pro.shape}')
+
+
+    x = concat_pro[:200, 0][::2]
+    y = concat_pro[:200, 1][::2]
+    z = concat_pro[:200, 2][::2]
+    yaw = concat_pro[:200, 3][::2]
+
+    timesteps = np.arange(len(x))
+
+    # Create a figure with two subplots side by side
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6), subplot_kw={'projection': '3d'})
+
+    # 3D Scatter Plot
+    ax1 = fig.add_subplot(121, projection='3d')
+    scatter = ax1.scatter(x, y, z, c='b', marker='o')
+    ax1.set_xlabel('X axis')
+    ax1.set_ylabel('Y axis')
+    ax1.set_zlabel('Z axis')
+    ax1.set_title('3D Scatter Plot of XYZ Coordinates (Every Second Value)')
+
+    # Plot Yaw over Timesteps
+    ax2 = fig.add_subplot(122)
+    ax2.plot(timesteps, yaw, 'r-o')
+    ax2.set_xlabel('Timestep')
+    ax2.set_ylabel('Yaw')
+    ax2.set_title('Yaw Over Timesteps (Every Second Value)')
+
+    # Adjust layout to prevent overlap
+    plt.tight_layout()
+
+    # Show plot
+    plt.show()
+
+
 def crop_video_square(file):
     with h5py.File(file, "r") as f:
         key = "image"
@@ -96,7 +144,7 @@ def choose_start(frame):
 
     cv2.destroyAllWindows()
 
-def extract_h5_data(file):
+def extract_h5_data(files):
     for file in files:
         with h5py.File(file, "r") as f:
             print("-----------------------------------------------------")
@@ -153,17 +201,16 @@ def list_files_in_directory(directory):
     # print(file_list)
     return file_list
 
-# sorts a dataset video in the correct order and returns a list
-def own_flow(dir):
-    set = '1'
+def sort_set(dir):
+    set = '0'
     files_l = list_files_in_directory(dir)
-    sorted = ['']*20
+    sorted = [''] * 20
     # print(f'This is: {np.array(files_l)}')
     files = [files_l[0]]
     for i in range(len(files_l)):
         filename = files_l[i][:-8]
-        print(f'List: {files_l[i]}')
-        print(f'Filename: {filename}')
+        # print(f'List: {files_l[i]}')
+        # print(f'Filename: {filename}')
         if filename[-2] == '_':
             if filename[-3] == set:
                 num = int(filename[-1])
@@ -174,6 +221,11 @@ def own_flow(dir):
                 sorted[num] = files_l[i]
 
     print(f'Sorted: {sorted}')
+    return sorted
+
+# sorts a dataset video in the correct order and returns a list
+def own_flow(dir):
+    sorted = sort_set(dir)
     i = 0
     for file in sorted:
         with h5py.File(file, "r") as f:
@@ -194,7 +246,8 @@ def own_flow(dir):
     size = height, height
     # duration = 2
     fps = 60
-    save_dir = r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/vid"
+    # save_dir = r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/vid"
+    save_dir = r"C:\Rest\Uni\14_SoSe\IRM_Prac_2\vid"
     # out = cv2.VideoWriter('output.mp4', cv2.VideoWriter_fourcc(*'mp4v'), fps, (size[1], size[0]), False)
     out = cv2.VideoWriter(f'{save_dir}_ownFlow.mp4', cv2.VideoWriter_fourcc(*'mp4v'), fps, (size[1], size[0]), True)
     if not opt_flow:
@@ -226,10 +279,6 @@ def own_flow(dir):
     out.release()
     print(f'vid size: {vid.shape}')
 
-
-
-
-
 def calc_optical_flow(images):
     # Number of frames
     num_frames = images.shape[0]
@@ -256,17 +305,11 @@ def calc_optical_flow(images):
     return optical_flows
 
 def concat_vid(dir):
-
-    files_l = list_files_in_directory(dir)
-    # print(f'This is: {np.array(files_l)}')
-    # files = [files_l[0]]
-    # files = np.concatenate(([files_l[20]], files_l[31:40], files_l[21:31]))
-    files = np.concatenate(([files_l[33]], [files_l[29]], [files_l[18]], [files_l[45]], [files_l[5]], [files_l[0]], [files_l[17]]))
-    print(files)
+    sorted = sort_set(dir)
     i = 0
-    for file in files:
+    for file in sorted:
         with h5py.File(file, "r") as f:
-            key = "optical_flow"
+            key = "image"
             images = f[key][:]
 
             if i == 0:
@@ -277,13 +320,15 @@ def concat_vid(dir):
 
             steps, height, width, channels = images.shape
 
-    opt_flow = True
+    opt_flow = False
+    vid = vid[:200]
     size = height, height
     # duration = 2
-    fps = 60
-    save_dir = r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/vid"
+    fps = 30
+    save_dir = r"C:\Rest\Uni\14_SoSe\IRM_Prac_2\data_test"
+    print('Reached')
     # out = cv2.VideoWriter('output.mp4', cv2.VideoWriter_fourcc(*'mp4v'), fps, (size[1], size[0]), False)
-    out = cv2.VideoWriter(f'{save_dir}_Flowview.mp4', cv2.VideoWriter_fourcc(*'mp4v'), fps, (size[1], size[0]), True)
+    out = cv2.VideoWriter(f'{save_dir}_TrueVid.mp4', cv2.VideoWriter_fourcc(*'mp4v'), fps, (size[1], size[0]), True)
     if not opt_flow:
         for img in vid:
             # data = np.random.randint(0, 256, size, dtype='uint8')
@@ -319,7 +364,7 @@ def concat_vid(dir):
 
 if __name__ == "__main__":
     # files = [r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/triangle_data/20190408_183047_triangle_0_journal_1_0_1000.h5"]
-    files = [r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/dataset"]
+    # files = [r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/dataset"]
 
     joint_struc_keys = ['j0', 'j1', 'j2', 'j3', 'j4', 'j5', 'j6']
     # cart_struc_keys = ['x', 'y', 'z']
@@ -328,6 +373,9 @@ if __name__ == "__main__":
     # crop_video_square(files[0])
     # concat_vid(r"C:\Rest\Uni\14_SoSe\IRM_Prac_2\data_test\triangle_real_data\triangle_real_data")
     # concat_vid(files[0])
-    own_flow(r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/triangle_data")
+    # own_flow(r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/triangle_data")
+    own_flow(r"C:\Rest\Uni\14_SoSe\IRM_Prac_2\data_test\triangle_real_data\triangle_real_data")
+    # concat_vid(r"C:\Rest\Uni\14_SoSe\IRM_Prac_2\data_test\triangle_real_data\triangle_real_data")
+    # plot_proprio(r"C:\Rest\Uni\14_SoSe\IRM_Prac_2\data_test\triangle_real_data\triangle_real_data")
     # read_triangle_data(files[0])
 
