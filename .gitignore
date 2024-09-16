@@ -119,3 +119,4 @@ fabric.properties
 .idea/*
 modality/modality.egg-info/*
 modality/build/*
+modality/dataset/*
