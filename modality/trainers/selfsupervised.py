@@ -37,6 +37,7 @@ class selfsupervised:
         self.configs = configs
         self.logger = logger
         self.device = torch.device("cuda" if use_cuda else "cpu")
+        self.tau_use = False
 
         if use_cuda:
             logger.print("Let's use", torch.cuda.device_count(), "GPUs!")
@@ -92,6 +93,7 @@ class selfsupervised:
         self.alpha_depth = configs["depth"]
         self.alpha_proprio = configs["proprio"]
         self.alpha_force = configs["force"]
+        self.alpha_tau = configs["tau"]
 
         # Global Counts For Logging
         self.global_cnt = {"train": 0, "val": 0}
@@ -203,7 +205,12 @@ class selfsupervised:
 
         # input data
         image = self.alpha_vision * sampled_batched["image"].to(self.device)
-        force = self.alpha_force * sampled_batched["force"].to(self.device)
+        if not self.tau_use:
+            force = self.alpha_force * sampled_batched["force"].to(self.device)
+            tau = None
+        else:
+            tau = self.alpha_tau * sampled_batched["tau"].to(self.device)
+            force = None
         proprio = self.alpha_proprio * sampled_batched["proprio"].to(self.device)
         depth = self.alpha_depth * sampled_batched["depth"].to(self.device).transpose(
             1, 3
@@ -219,9 +226,15 @@ class selfsupervised:
         unpaired_image = self.alpha_vision * sampled_batched["unpaired_image"].to(
             self.device
         )
-        unpaired_force = self.alpha_force * sampled_batched["unpaired_force"].to(
-            self.device
-        )
+        if not self.tau_use:
+            unpaired_force = self.alpha_force * sampled_batched["unpaired_force"].to(
+                self.device
+            )
+            unpaired_tau = None
+        else:
+            unpaired_tau = self.alpha_tau * sampled_batched["unpaired_tau"].to(self.device)
+            unpaired_force = None
+
         unpaired_proprio = self.alpha_proprio * sampled_batched["unpaired_proprio"].to(
             self.device
         )
@@ -234,12 +247,12 @@ class selfsupervised:
 
         if self.deterministic:
             paired_out, contact_out, flow2, optical_flow2_mask, ee_delta_out, mm_feat = self.model(
-                image, force, proprio, depth, action
+                image, force, proprio, depth, action, tau
             )
             kl = torch.tensor([0]).to(self.device).type(torch.cuda.FloatTensor)
         else:
             paired_out, contact_out, flow2, optical_flow2_mask, ee_delta_out, mm_feat, mu_z, var_z, mu_prior, var_prior = self.model(
-                image, force, proprio, depth, action
+                image, force, proprio, depth, action, tau
             )
             kl = self.alpha_kl * torch.mean(
                 kl_normal(mu_z, var_z, mu_prior.squeeze(0), var_prior.squeeze(0))
@@ -274,7 +287,7 @@ class selfsupervised:
         )
 
         unpaired_total_losses = self.model(
-            unpaired_image, unpaired_force, unpaired_proprio, unpaired_depth, action
+            unpaired_image, unpaired_force, unpaired_proprio, unpaired_depth, action, unpaired_tau
         )
         unpaired_out = unpaired_total_losses[0]
         unpaired_loss = self.alpha_pair * self.loss_is_paired(
@@ -397,35 +410,62 @@ class selfsupervised:
 
         self.logger.print("Sampler finished")
 
-        self.datasets["train"] = MultimodalManipulationDataset(
-            filename_list1,
-            transform=transforms.Compose(
-                [
-                    ProcessForce(32, "force", tanh=True),
-                    ProcessForce(32, "unpaired_force", tanh=True),
-                    ToTensor(device=self.device),
-                ]
-            ),
-            episode_length=self.configs["ep_length"],
-            training_type=self.configs["training_type"],
-            action_dim=self.configs["action_dim"],
+        if not self.tau_use:
+            self.datasets["train"] = MultimodalManipulationDataset(
+                filename_list1,
+                transform=transforms.Compose(
+                    [
+                        ProcessForce(32, "force", tanh=True),
+                        ProcessForce(32, "unpaired_force", tanh=True),
+                        ToTensor(device=self.device),
+                    ]
+                ),
+                episode_length=self.configs["ep_length"],
+                training_type=self.configs["training_type"],
+                action_dim=self.configs["action_dim"],
+                tau_use=self.tau_use,
+            )
 
-        )
+            self.datasets["val"] = MultimodalManipulationDataset(
+                val_filename_list1,
+                transform=transforms.Compose(
+                    [
+                        ProcessForce(32, "force", tanh=True),
+                        ProcessForce(32, "unpaired_force", tanh=True),
+                        ToTensor(device=self.device),
+                    ]
+                ),
+                episode_length=self.configs["ep_length"],
+                training_type=self.configs["training_type"],
+                action_dim=self.configs["action_dim"],
+                tau_use=self.tau_use,
+            )
+        else:
+            self.datasets["train"] = MultimodalManipulationDataset(
+                filename_list1,
+                transform=transforms.Compose(
+                    [
+                        ToTensor(device=self.device),
+                    ]
+                ),
+                episode_length=self.configs["ep_length"],
+                training_type=self.configs["training_type"],
+                action_dim=self.configs["action_dim"],
+                tau_use=self.tau_use,
+            )
 
-        self.datasets["val"] = MultimodalManipulationDataset(
-            val_filename_list1,
-            transform=transforms.Compose(
-                [
-                    ProcessForce(32, "force", tanh=True),
-                    ProcessForce(32, "unpaired_force", tanh=True),
-                    ToTensor(device=self.device),
-                ]
-            ),
-            episode_length=self.configs["ep_length"],
-            training_type=self.configs["training_type"],
-            action_dim=self.configs["action_dim"],
-
-        )
+            self.datasets["val"] = MultimodalManipulationDataset(
+                val_filename_list1,
+                transform=transforms.Compose(
+                    [
+                        ToTensor(device=self.device),
+                    ]
+                ),
+                episode_length=self.configs["ep_length"],
+                training_type=self.configs["training_type"],
+                action_dim=self.configs["action_dim"],
+                tau_use=self.tau_use,
+            )
 
         self.logger.print("Dataset finished")
 

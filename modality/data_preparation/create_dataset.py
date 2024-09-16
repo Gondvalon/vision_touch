@@ -6,6 +6,7 @@ import sys
 
 from tqdm import tqdm
 from scipy.spatial.transform import Rotation as R
+from scipy.ndimage import median_filter
 
 class CreateDatasetFromRecord():
     def __init__(self, dataset_dir, recording_dir):
@@ -216,16 +217,64 @@ class CreateDatasetFromRecord():
         # Convert the list to a numpy array for easier handling
         optical_flows = np.array(optical_flows)
 
-        return optical_flows
+        # normalize optical flow
+        for i in range(optical_flows.shape[0]):
+            optical_flows[i] = self.normalize_optical_flow(optical_flows[i])
+
+        # apply threshold
+        thresh_flow = self.threshold_flow(optical_flows)
+        # apply median filter over three frames
+        med_flow = self.apply_median_filter(thresh_flow)
+
+        return med_flow
+
+        def threshold_flow(self, flow, threshold=0.15):
+            # Compute the magnitude of the flow
+            magnitude = np.sqrt(np.sum(flow ** 2, axis=-1, keepdims=True))
+            # Create mask to fit dimensions to apply threshold
+            mask = magnitude < threshold
+            # Apply threshold: zero out flow vectors with small magnitudes
+            flow[mask.repeat(2, axis=-1)] = 0
+            return flow
+
+    def apply_median_filter(self, flow_frames, size=3):
+        filtered_flow = np.copy(flow_frames)
+        for i in range(2):
+            filtered_flow[..., i] = median_filter(flow_frames[..., i], size=size)
+        return filtered_flow
+
+    def normalize_optical_flow(self, flow):
+        # Compute the magnitude of the flow vectors
+        magnitude = np.sqrt(np.sum(flow ** 2, axis=-1, keepdims=True))  # shape (H, W, 1)
+
+        # Find the maximum magnitude across the entire flow field
+        max_magnitude = np.max(magnitude)
+
+        if max_magnitude > 0:
+            # Normalize the flow by dividing by the maximum magnitude
+            normalized_flow = flow / max_magnitude
+        else:
+            # If the maximum magnitude is 0, the flow is all zero; return it as-is
+            normalized_flow = flow
+
+        return normalized_flow
+
 
 
 
 
 
 if __name__ == "__main__":
-    DATASET_DIR = r'C:\Rest\Uni\14_SoSe\IRM_Prac_2\data_test\new_dataset'
-    RECORDING_DIR = r'C:\Rest\Uni\14_SoSe\IRM_Prac_2\data_test'
-    # RECORDING_DIR = r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/recordings"
-    # DATASET_DIR = r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/dataset"
+    if os.name == 'nt':
+        print('Using Windows system')
+        DATASET_DIR = r'C:\Rest\Uni\14_SoSe\IRM_Prac_2\data_test\new_dataset'
+        RECORDING_DIR = r'C:\Rest\Uni\14_SoSe\IRM_Prac_2\data_test'
+    elif os.name == 'posix':
+        print('Using Linux system')
+        RECORDING_DIR = r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/recordings"
+        DATASET_DIR = r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/dataset"
+    else:
+        print(f'Os name not recognized: {os.name}')
+        sys.exit(0)
 
     create = CreateDatasetFromRecord(DATASET_DIR, RECORDING_DIR)

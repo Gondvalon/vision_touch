@@ -6,6 +6,8 @@ import cv2
 import matplotlib.pyplot as plt
 import os
 
+from scipy.ndimage import gaussian_filter, median_filter
+
 # can plot values as tau, q, dq
 def plot_joint_values(file, value, struc_keys):
     with h5py.File(file, "r") as f:
@@ -245,7 +247,7 @@ def own_flow(dir):
     opt_flow = True
     size = height, height
     # duration = 2
-    fps = 60
+    fps = 30
     # save_dir = r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/vid"
     save_dir = r"C:\Rest\Uni\14_SoSe\IRM_Prac_2\vid"
     # out = cv2.VideoWriter('output.mp4', cv2.VideoWriter_fourcc(*'mp4v'), fps, (size[1], size[0]), False)
@@ -302,7 +304,47 @@ def calc_optical_flow(images):
 
     # Convert the list to a numpy array for easier handling
     optical_flows = np.array(optical_flows)
-    return optical_flows
+
+    # normalize optical flow and smooth with gaussian filter
+    for i in range(optical_flows.shape[0]):
+        optical_flows[i] = normalize_optical_flow(optical_flows[i])
+
+    # smoothe flow over 3 frames
+    thresh_flow = threshold_flow(optical_flows)
+    med_flow = apply_median_filter(thresh_flow)
+    # print(f'Shape: {smoothed_frames.shape}')
+    return med_flow
+
+def threshold_flow(flow, threshold=0.15):
+        # Compute the magnitude of the flow
+        magnitude = np.sqrt(np.sum(flow ** 2, axis=-1, keepdims=True))
+        # Create mask to fit dimensions to apply threshold
+        mask = magnitude < threshold
+        # Apply threshold: zero out flow vectors with small magnitudes
+        flow[mask.repeat(2, axis=-1)] = 0
+        return flow
+
+def apply_median_filter(flow_frames, size=3):
+    filtered_flow = np.copy(flow_frames)
+    for i in range(2):
+        filtered_flow[..., i] = median_filter(flow_frames[..., i], size=size)
+    return filtered_flow
+
+def normalize_optical_flow(flow):
+    # Compute the magnitude of the flow vectors
+    magnitude = np.sqrt(np.sum(flow ** 2, axis=-1, keepdims=True))  # shape (H, W, 1)
+
+    # Find the maximum magnitude across the entire flow field
+    max_magnitude = np.max(magnitude)
+
+    if max_magnitude > 0:
+        # Normalize the flow by dividing by the maximum magnitude
+        normalized_flow = flow / max_magnitude
+    else:
+        # If the maximum magnitude is 0, the flow is all zero; return it as-is
+        normalized_flow = flow
+
+    return normalized_flow
 
 def concat_vid(dir):
     sorted = sort_set(dir)
@@ -363,19 +405,27 @@ def concat_vid(dir):
 
 
 if __name__ == "__main__":
-    # files = [r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/triangle_data/20190408_183047_triangle_0_journal_1_0_1000.h5"]
-    # files = [r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/dataset"]
-
     joint_struc_keys = ['j0', 'j1', 'j2', 'j3', 'j4', 'j5', 'j6']
-    # cart_struc_keys = ['x', 'y', 'z']
-    # extract_h5_data(files)
-    # plot_joint_values(files[0], "tau", joint_struc_keys)
-    # crop_video_square(files[0])
-    # concat_vid(r"C:\Rest\Uni\14_SoSe\IRM_Prac_2\data_test\triangle_real_data\triangle_real_data")
-    # concat_vid(files[0])
-    # own_flow(r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/triangle_data")
-    own_flow(r"C:\Rest\Uni\14_SoSe\IRM_Prac_2\data_test\triangle_real_data\triangle_real_data")
-    # concat_vid(r"C:\Rest\Uni\14_SoSe\IRM_Prac_2\data_test\triangle_real_data\triangle_real_data")
-    # plot_proprio(r"C:\Rest\Uni\14_SoSe\IRM_Prac_2\data_test\triangle_real_data\triangle_real_data")
-    # read_triangle_data(files[0])
+    cart_struc_keys = ['x', 'y', 'z']
+    if os.name == 'posix':
+        print('Using Linux')
+        # files = [r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/triangle_data/20190408_183047_triangle_0_journal_1_0_1000.h5"]
+        # files = [r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/dataset"]
+
+        # concat_vid(files[0])
+        # own_flow(r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/triangle_data")
+        # plot_joint_values(files[0], "tau", joint_struc_keys)
+        # crop_video_square(files[0])
+        # extract_h5_data(files)
+        # read_triangle_data(files[0])
+    elif os.name == 'nt':
+        print('Using Windows')
+        own_flow(r"C:\Rest\Uni\14_SoSe\IRM_Prac_2\data_test\triangle_real_data\triangle_real_data")
+        # concat_vid(r"C:\Rest\Uni\14_SoSe\IRM_Prac_2\data_test\triangle_real_data\triangle_real_data")
+        # plot_proprio(r"C:\Rest\Uni\14_SoSe\IRM_Prac_2\data_test\triangle_real_data\triangle_real_data")
+        # concat_vid(r"C:\Rest\Uni\14_SoSe\IRM_Prac_2\data_test\triangle_real_data\triangle_real_data")
+    else:
+        print(f'Os name not recognized: {os.name}')
+
+
 

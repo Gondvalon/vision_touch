@@ -17,7 +17,8 @@ class MultimodalManipulationDataset(Dataset):
         training_type="selfsupervised",
         n_time_steps=1,
         action_dim=4,
-        pairing_tolerance=0.06
+        pairing_tolerance=0.06,
+        tau_use = False
     ):
         """
         Args:
@@ -36,6 +37,8 @@ class MultimodalManipulationDataset(Dataset):
 
         self._config_checks()
         self._init_paired_filenames()
+        # decides if tau or the readings of a force sensor get used
+        self.tau_use = tau_use
 
     def __len__(self):
         return len(self.dataset_path) * (self.episode_length - self.n_time_steps)
@@ -76,8 +79,10 @@ class MultimodalManipulationDataset(Dataset):
             image = dataset["image"][dataset_index]
             depth = dataset["depth_data"][dataset_index]
             proprio = dataset["proprio"][dataset_index][:8]
-            force = dataset["ee_forces_continuous"][dataset_index]
-            tau = dataset["tau"][dataset_index]
+            if not self.tau_use:
+                force = dataset["ee_forces_continuous"][dataset_index]
+            else:
+                tau = dataset["tau"][dataset_index]
 
             if image.shape[0] == 3:
                 image = np.transpose(image, (2, 1, 0))
@@ -99,8 +104,10 @@ class MultimodalManipulationDataset(Dataset):
             unpaired_image = image
             unpaired_depth = depth
             unpaired_proprio = unpaired_dataset["proprio"][unpaired_idx][:8]
-            unpaired_force = unpaired_dataset["ee_forces_continuous"][unpaired_idx]
-            unpaired_tau = unpaired_dataset["tau"][unpaired_idx]
+            if not self.tau_use:
+                unpaired_force = unpaired_dataset["ee_forces_continuous"][unpaired_idx]
+            else:
+                unpaired_tau = unpaired_dataset["tau"][unpaired_idx]
 
             sample = {
                 "image": image,
@@ -108,19 +115,22 @@ class MultimodalManipulationDataset(Dataset):
                 "flow": flow,
                 "flow_mask": flow_mask,
                 "action": dataset["action"][dataset_index + 1],
-                "force": force,
-                "tau": tau,
                 "proprio": proprio,
                 "ee_yaw_next": dataset["proprio"][dataset_index + 1][:self.action_dim],
-                "contact_next": np.array(
-                    [dataset["contact"][dataset_index + 1].sum() > 0]
-                ).astype(np.float),
                 "unpaired_image": unpaired_image,
-                "unpaired_force": unpaired_force,
                 "unpaired_proprio": unpaired_proprio,
                 "unpaired_depth": unpaired_depth,
-                "unpaired_tau": unpaired_tau
             }
+            # depending if tau or force sensor is used
+            if not self.tau_use:
+                sample["force"] = force
+                sample["contact_next"] = np.array(
+                    [dataset["contact"][dataset_index + 1].sum() > 0]).astype(np.float)
+                sample["unpaired_force"] = unpaired_force
+            else:
+                sample["tau"] = tau
+                sample["unpaired_tau"] = unpaired_tau
+
 
         dataset.close()
         unpaired_dataset.close()

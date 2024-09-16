@@ -58,7 +58,7 @@ class SensorFusion(nn.Module):
         # -----------------------
         self.img_encoder = ImageEncoder(self.z_dim)
         self.depth_encoder = DepthEncoder(self.z_dim)
-        # self.frc_encoder = ForceEncoder(self.z_dim)
+        self.frc_encoder = ForceEncoder(self.z_dim)
         self.proprio_encoder = ProprioEncoder(self.z_dim)
         self.tau_encoder = TauEncoder(self.z_dim)
 
@@ -117,13 +117,18 @@ class SensorFusion(nn.Module):
         # Get encoded outputs
         img_out, img_out_convs = self.img_encoder(image)
         depth_out, depth_out_convs = self.depth_encoder(depth)
-        # frc_out = self.frc_encoder(frc_in)
-        tau_out = self.tau_encoder(tau_in)
+        if frc_in is not None and tau_in is None:
+            frc_out = self.frc_encoder(frc_in)
+        elif tau_in is not None and frc_in is None:
+            tau_out = self.tau_encoder(tau_in)
         proprio_out = self.proprio_encoder(proprio_in)
 
         if self.deterministic:
             # multimodal embedding
-            mm_f1 = torch.cat([img_out, tau_out, proprio_out, depth_out], 1).squeeze()
+            if frc_in is not None and tau_in is None:
+                mm_f1 = torch.cat([img_out, frc_out, proprio_out, depth_out], 1).squeeze()
+            elif tau_in is not None and frc_in is None:
+                mm_f1 = torch.cat([img_out, tau_out, proprio_out, depth_out], 1).squeeze()
             mm_f2 = self.fusion_fc1(mm_f1)
             z = self.fusion_fc2(mm_f2)
 
@@ -137,19 +142,30 @@ class SensorFusion(nn.Module):
 
             # Modality Mean and Variances
             mu_z_img, var_z_img = gaussian_parameters(img_out, dim=1)
-            # mu_z_frc, var_z_frc = gaussian_parameters(frc_out, dim=1)
-            mu_z_tau, var_z_tau = gaussian_parameters(tau_out, dim=1)
+            if frc_in is not None and tau_in is None:
+                mu_z_frc, var_z_frc = gaussian_parameters(frc_out, dim=1)
+            elif tau_in is not None and frc_in is None:
+                mu_z_tau, var_z_tau = gaussian_parameters(tau_out, dim=1)
             mu_z_proprio, var_z_proprio = gaussian_parameters(proprio_out, dim=1)
             mu_z_depth, var_z_depth = gaussian_parameters(depth_out, dim=1)
 
             # Tile distribution parameters using concatonation
-            m_vect = torch.cat(
-                [mu_z_img, mu_z_tau, mu_z_proprio, mu_z_depth, mu_prior_resized], dim=2
-            )
-            var_vect = torch.cat(
-                [var_z_img, var_z_tau, var_z_proprio, var_z_depth, var_prior_resized],
-                dim=2,
-            )
+            if frc_in is not None and tau_in is None:
+                m_vect = torch.cat(
+                    [mu_z_img, mu_z_frc, mu_z_proprio, mu_z_depth, mu_prior_resized], dim=2
+                )
+                var_vect = torch.cat(
+                    [var_z_img, var_z_frc, var_z_proprio, var_z_depth, var_prior_resized],
+                    dim=2,
+                )
+            elif tau_in is not None and frc_in is None:
+                m_vect = torch.cat(
+                    [mu_z_img, mu_z_tau, mu_z_proprio, mu_z_depth, mu_prior_resized], dim=2
+                )
+                var_vect = torch.cat(
+                    [var_z_img, var_z_tau, var_z_proprio, var_z_depth, var_prior_resized],
+                    dim=2,
+                )
 
             # Fuse modalities mean / variances using product of experts
             mu_z, var_z = product_of_experts(m_vect, var_vect)
@@ -159,9 +175,15 @@ class SensorFusion(nn.Module):
 
         if self.encoder_bool or action_in is None:
             if self.deterministic:
-                return img_out, tau_out, proprio_out, depth_out, z
+                if frc_in is not None and tau_in is None:
+                    return img_out, frc_out, proprio_out, depth_out, z
+                elif tau_in is not None and frc_in is None:
+                    return img_out, tau_out, proprio_out, depth_out, z
             else:
-                return img_out_convs, img_out, tau_out, proprio_out, depth_out, z
+                if frc_in is not None and tau_in is None:
+                    return img_out_convs, img_out, frc_out, proprio_out, depth_out, z
+                elif tau_in is not None and frc_in is None:
+                    return img_out_convs, img_out, tau_out, proprio_out, depth_out, z
         else:
             # action embedding
             act_feat = self.action_encoder(action_in)
