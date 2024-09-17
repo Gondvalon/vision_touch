@@ -37,7 +37,7 @@ logging_folder: logging/
 
 
 # path to dataset hdf5 file'
-dataset: "dataset/"
+dataset: "../dataset/small_real_data/"
 
 val_ratio: 0.20
 cuda: True

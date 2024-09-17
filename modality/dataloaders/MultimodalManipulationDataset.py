@@ -125,7 +125,7 @@ class MultimodalManipulationDataset(Dataset):
             if not self.tau_use:
                 sample["force"] = force
                 sample["contact_next"] = np.array(
-                    [dataset["contact"][dataset_index + 1].sum() > 0]).astype(np.float)
+                    [dataset["contact"][dataset_index + 1].sum() > 0]).astype(np.float64)
                 sample["unpaired_force"] = unpaired_force
             else:
                 sample["tau"] = tau

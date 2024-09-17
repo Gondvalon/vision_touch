@@ -266,8 +266,8 @@ class selfsupervised:
 
         b, _, h, w = optical_flow_label.size()
 
-        optical_flow_mask = nn.functional.upsample(
-            optical_flow2_mask, size=(h, w), mode="bilinear"
+        optical_flow_mask = nn.functional.interpolate(
+            optical_flow2_mask, size=(h, w), mode="bilinear", align_corners=True
         )
 
         flow_mask_loss = self.alpha_optical_flow_mask * self.loss_optical_flow_mask(
@@ -360,9 +360,15 @@ class selfsupervised:
         self.logger.tb.add_scalar("stats/iter_time", time.time() - t_st, global_cnt)
 
     def _init_dataloaders(self):
+        # Get the directory of the current script
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+
+        # Construct the path relative to the project root
+        dataset_dir = os.path.join(script_dir, self.configs["dataset"])
+
         # list of all file pathes for the dataset
         filename_list = []
-        for file in os.listdir(self.configs["dataset"]):
+        for file in os.listdir(dataset_dir):
             if file.endswith(".h5"):
                 filename_list.append(self.configs["dataset"] + file)
 
@@ -501,7 +507,7 @@ class selfsupervised:
 
         b, c, h, w = flow_label.size()
 
-        upsampled_flow = nn.functional.upsample(flow2, size=(h, w), mode="bilinear")
+        upsampled_flow = nn.functional.interpolate(flow2, size=(h, w), mode="bilinear", align_corners=True)
         upsampled_flow = upsampled_flow.cpu().detach().numpy()
         orig_image = image[image_index].cpu().numpy()
 
