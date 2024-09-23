@@ -1,0 +1,40 @@
+action_dim: 4
+batch_size: 64
+beta1: 0.9
+config: ../configs/training_default.yaml
+contact: 1.0
+continuation: false
+cuda: true
+dataset: ../dataset/small_real_data/
+dataset_params:
+  action_dim: 4
+  force_name: force
+depth: 1.0
+deterministic: false
+dev: false
+eedelta: 1.0
+encoder: false
+ep_length: 50
+force: 1.0
+img_record_n: 500
+latest_weights: logging/202409230023_/models/weights_itr_49.ckpt
+load: ''
+log_level: INFO
+logging_folder: logging/202409230023_
+lr: 0.0001
+max_epoch: 50
+notes: ''
+num_workers: 8
+opticalflow: 1.0
+pairing: 1.0
+proprio: 1.0
+sceneflow: 1.0
+seed: 1234
+start_weights:
+- ''
+tau: 1.0
+test: false
+training_type: selfsupervised
+val_ratio: 0.2
+vision: 1.0
+zdim: 128

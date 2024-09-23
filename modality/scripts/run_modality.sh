@@ -6,8 +6,8 @@
 ## Controls the number of replications of the job that are run. E.g. use #SBATCH -a 0-2 for 3 replications
 ## The specific ID of the replication can be accesses with the environment variable $SLURM_ARRAY_TASK_ID
 ## Can be used for seeding
-#SBATCH -n 1  
-## ALWAYS leave this value to 1. This is only used for MPI, which is not supported now. 
+#SBATCH -n 1
+## ALWAYS leave this value to 1. This is only used for MPI, which is not supported now.
 #SBATCH -c 4
 ## Specify the number of cores per job.
 #SBATCH --mem-per-cpu 2000
@@ -16,13 +16,13 @@
 #SBATCH -t 05:00:00
 ## Do not allocate more time than you REALLY need. Maximum is 6 hours.
 
-##SBATCH -A ##kurs00077                                                                                                                                                                                                    
-##SBATCH -p ##kurs00077                                                                                                                                                                                                    
+##SBATCH -A ##kurs00077
+##SBATCH -p ##kurs00077
 ## SBATCH --reservation=kurs00077
 ## Comment these lines out if running locally!
 
-#SBATCH -o /home/philipp/Uni/14_SoSe/IRM_Prac_2/logs/%A_%a.out
-#SBATCH -e /home/philipp/Uni/14_SoSe/IRM_Prac_2/logs/%A_%a.err
-## Make sure to create the logs directory (log_sbatch) in [YOUR_LOCATION], BEFORE launching the jobs. [YOUR_LOCATION] needs to be specified by you.
+#SBATCH -o /mnt/c/Rest/Uni/14_SoSe/IRM_Prac_2/logs/%A_%a.out
+#SBATCH -e /mnt/c/Rest/Uni/14_SoSe/IRM_Prac_2/logs/%A_%a.err
+## Make sure sure to create the logs folder
 
 python ../main.py --config ../configs/training_default.yaml

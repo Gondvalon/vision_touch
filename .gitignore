@@ -120,3 +120,5 @@ fabric.properties
 modality/modality.egg-info/*
 modality/build/*
 modality/dataset/*
+
+__pycache__/
