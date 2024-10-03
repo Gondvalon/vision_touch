@@ -400,7 +400,79 @@ def concat_vid(dir):
     out.release()
     print(f'vid size: {vid.shape}')
 
+def plot_tau(file):
+    with h5py.File(file, "r") as f:
+        tau = f['tau'][:]
+        ext_tau = f['ext_tau'][:]
+        plt.figure(1, figsize=(10, 6))
 
+        # Define color maps for the two datasets
+        colors1 = plt.cm.Blues(np.linspace(0.4, 1, 7))  # Color range for data1
+        colors2 = plt.cm.Reds(np.linspace(0.4, 1, 7))  # Color range for data2
+
+        internal_tau = tau - ext_tau
+        ext_sum = np.sum(np.abs(ext_tau), axis=1)
+        # Plot the lines from the first dataset
+        # for i in range(7):
+        #     plt.plot(tau[:, i], color=colors1[i], label=f'Data1 - Line {i + 1}')
+
+        # Plot the lines from the second dataset
+        for i in range(7):
+            plt.plot(ext_tau[:, i], color=colors2[i], linestyle='--', label=f'ExtTau{i + 1}')
+        plt.plot(ext_sum, color=colors1[0], label='Summed Tau')
+
+
+        # Add labels and a legend
+        plt.xlabel('Steps')
+        plt.ylabel('Force')
+        plt.title('Plot external forces and its summed absolute')
+        plt.legend(loc='upper right')
+
+        plt.figure(2, figsize=(10, 6))
+
+        for i in range(7):
+            plt.plot(np.abs(tau[:, i]), color=colors1[i], label=f'Tau{i+1}')
+        for i in range(7):
+            plt.plot(np.abs(internal_tau[:, i]), color=colors2[i], linestyle='--', label=f'Internal Tau{i+1}')
+
+        plt.plot(ext_sum, color=colors1[0], label='Summed Tau')
+
+        # Add labels and a legend
+        plt.xlabel('Steps')
+        plt.ylabel('Force')
+        plt.title('Plot Internal forces and the general forces')
+        plt.legend(loc='upper right')
+
+        # Show the plot
+        plt.show()
+
+def save_video(file):
+    with h5py.File(file, "r") as f:
+        color_bool = True
+        if color_bool:
+            key = "fixed_view_right"
+        else:
+            key = "fixed_view_right_depth"
+        images = f[key][:]  # Assuming depth images are stored as single-channel
+
+        steps, height, width = images.shape[:3]  # channels should be 1 for single-channel images
+        # assert channels == 1, "Depth images should have only one channel."
+
+        size = (width, height)
+        fps = 30
+        save_dir = r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/flagsNdepth"
+        out = cv2.VideoWriter(f'{save_dir}_TrueVid.mp4', cv2.VideoWriter_fourcc(*'mp4v'), fps, size, isColor=color_bool)
+
+        for img in images:
+            if not color_bool:
+                # Normalize the image to 8-bit range (0-255)
+                img_normalized = cv2.normalize(img, None, 0, 255, cv2.NORM_MINMAX)
+                img_uint8 = np.uint8(img_normalized)  # Convert to 8-bit unsigned integer
+                out.write(img_uint8)
+            else:
+                out.write(img)
+
+        out.release()
 
 
 
@@ -410,7 +482,8 @@ if __name__ == "__main__":
     if os.name == 'posix':
         print('Using Linux')
         # files = [r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/triangle_data/20190408_183047_triangle_0_journal_1_0_1000.h5"]
-        # files = [r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/dataset"]
+        files = [r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/dataset", r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/flagsNdepth/vision.h5",
+                 r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/recordings/interesting_f.h5"]
 
         # concat_vid(files[0])
         # own_flow(r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/triangle_data")
@@ -418,6 +491,8 @@ if __name__ == "__main__":
         # crop_video_square(files[0])
         # extract_h5_data(files)
         # read_triangle_data(files[0])
+        plot_tau(files[1])
+        save_video(files[1])
     elif os.name == 'nt':
         print('Using Windows')
         own_flow(r"C:\Rest\Uni\14_SoSe\IRM_Prac_2\data_test\triangle_real_data\triangle_real_data")
