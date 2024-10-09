@@ -24,7 +24,7 @@ class CreateDatasetFromRecord():
         self.num_subfiles = 0
         self.data_per_file = 50
 
-        self.keys = ["fixed_view_right", "q", "dq", "positions", "orientations", "tau"]
+        self.keys = ["fixed_view_left", "q", "dq", "positions", "orientations", "tau", "ext_tau", "fixed_view_left_depth"]
 
 
         # list of all files in dir that end with .h5

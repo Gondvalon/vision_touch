@@ -1,4 +1,5 @@
 import copy
+from operator import concat
 
 import h5py
 import numpy as np
@@ -6,7 +7,9 @@ import cv2
 import matplotlib.pyplot as plt
 import os
 
+from matplotlib.lines import lineStyles
 from scipy.ndimage import gaussian_filter, median_filter
+from tqdm import tqdm
 
 # can plot values as tau, q, dq
 def plot_joint_values(file, value, struc_keys):
@@ -82,7 +85,7 @@ def plot_proprio(dir):
 
 def crop_video_square(file):
     with h5py.File(file, "r") as f:
-        key = "image"
+        key = "fixed_view_left"
         images = f[key][:]
 
         # RGB is flipped to BGR
@@ -95,16 +98,19 @@ def crop_video_square(file):
 
         if not height == width:
             idx = choose_start(images[0])
+            print(f'This is the index: {idx}')
 
             images = images[:, :, idx:(idx+height), :]
+            images = images[:, 20:-20, 20:-20, :]
             print(f'NewShape: {images.shape}')
 
         # generate video from h5
-        size = height, height
+        size = images.shape[1], images.shape[1]
         # duration = 2
         fps = 30
+        save_dir = r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/vid"
         # out = cv2.VideoWriter('output.mp4', cv2.VideoWriter_fourcc(*'mp4v'), fps, (size[1], size[0]), False)
-        out = cv2.VideoWriter(f'{file}_view.mp4', cv2.VideoWriter_fourcc(*'mp4v'), fps, (size[1], size[0]), True)
+        out = cv2.VideoWriter(f'{save_dir}_CroppedPad.mp4', cv2.VideoWriter_fourcc(*'mp4v'), fps, (size[1], size[0]), True)
         for img in images:
             # data = np.random.randint(0, 256, size, dtype='uint8')
             # img_swap = np.swapaxes(img, 0, 2)
@@ -156,7 +162,7 @@ def extract_h5_data(files):
                 print(f"value: {value}")
             print("-----------------------------------------------------")
 
-            key = "fixed_view_right"
+            key = "fixed_view_left"
             images = f[key][:]
             print(f'IMG: {images.shape}')
 
@@ -204,7 +210,7 @@ def list_files_in_directory(directory):
     return file_list
 
 def sort_set(dir):
-    set = '0'
+    set = '1'
     files_l = list_files_in_directory(dir)
     sorted = [''] * 20
     # print(f'This is: {np.array(files_l)}')
@@ -225,13 +231,12 @@ def sort_set(dir):
     print(f'Sorted: {sorted}')
     return sorted
 
-# sorts a dataset video in the correct order and returns a list
-def own_flow(dir):
+def vid_TrueFlow(dir):
     sorted = sort_set(dir)
     i = 0
     for file in sorted:
         with h5py.File(file, "r") as f:
-            key = "image"
+            key = "optical_flow"
             images = f[key][:]
 
             if i == 0:
@@ -242,14 +247,115 @@ def own_flow(dir):
 
             steps, height, width, channels = images.shape
 
+    size = height, height
+    fps = 30
+    # save_dir = r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/vid"
+    save_dir = r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/vid"
+    # out = cv2.VideoWriter('output.mp4', cv2.VideoWriter_fourcc(*'mp4v'), fps, (size[1], size[0]), False)
+    out = cv2.VideoWriter(f'{save_dir}TrueOpticalFlow.mp4', cv2.VideoWriter_fourcc(*'mp4v'), fps, (size[1], size[0]), True)
+    for flow in concat_img:  # flow is of shape (height, width, 2)
+        # Calculate the magnitude and angle of the flow
+        magnitude, angle = cv2.cartToPolar(flow[..., 0], flow[..., 1])
+
+        # Normalize the magnitude to fit into the range [0, 1]
+        magnitude = cv2.normalize(magnitude, None, 0, 1, cv2.NORM_MINMAX)
+
+        # Create an HSV image
+        hsv = np.zeros((height, width, 3), dtype=np.float32)
+        hsv[..., 0] = angle * 180 / np.pi / 2  # Hue (0 - 180)
+        hsv[..., 1] = 1  # Saturation
+        hsv[..., 2] = magnitude  # Value (Brightness)
+
+        # Convert HSV to RGB (or BGR in OpenCV)
+        rgb = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
+
+        # Convert the image back to 8-bit
+        rgb = np.uint8(rgb * 255)
+
+        out.write(rgb)
+    out.release()
+    print(f'vid size: {concat_img.shape}')
+
+
+
+# sorts a dataset video in the correct order and returns a list
+def own_flow(dir):
+    triangle = False
+    if triangle:
+        sorted = sort_set(dir)
+        i = 0
+        for file in sorted:
+            with h5py.File(file, "r") as f:
+                key = "image"
+                images = f[key][:]
+                depths = f['depth_data'][:]
+
+                if i == 0:
+                    concat_img = images
+                    concat_depth = depths
+                    i +=1
+                else:
+                    concat_img = np.concatenate((concat_img, images))
+                    concat_depth = np.concatenate((concat_depth, depths))
+
+                steps, height, width, channels = images.shape
+    else:
+        with h5py.File(dir, "r") as f:
+            concat_img = f['fixed_view_left'][:]
+            concat_depth = f['fixed_view_left_depth'][:]
+
+            steps, height, width, channels = concat_img.shape
+
+            idx = 140
+
+        concat_img = concat_img[:, :, idx:(idx+height), :]
+        concat_img = concat_img[:, 20:-20, 20:-20, :]
+        concat_depth = concat_depth[:, :, idx:(idx+height)]
+        concat_depth = concat_depth[:, 20:-20, 20:-20]
+
+        downsampled_images = []
+        downsampled_depths = []
+        for i in range(len(concat_img)):
+            # Resize the frame using cv2.resize
+            resized_img_frame = cv2.resize(concat_img[i], (128, 128), interpolation=cv2.INTER_LINEAR)
+            resized_depth_frame = cv2.resize(concat_depth[i], (128, 128), interpolation=cv2.INTER_LINEAR)
+            downsampled_images.append(resized_img_frame)
+            downsampled_depths.append(resized_depth_frame)
+
+        concat_img = np.array(downsampled_images)
+        concat_depth = np.array(downsampled_depths)
+
+        steps, height, width, channels = concat_img.shape
+
+
+    print(concat_img.shape)
+
+    for i in tqdm(range(concat_img.shape[0])):
+        concat_depth[i] = np.nan_to_num(concat_depth[i], nan=0.0, posinf=12.0, neginf=0.0)
+        mask = np.where((concat_depth[i] >= 0.3) & (concat_depth[i] < 1), 1, 0).astype(np.uint8)
+
+        if triangle:
+            # Expand the mask to shape (128 , 128, 3) to match concat_img[i]
+            mask_expanded = np.repeat(mask, 3, axis=2)
+        else:
+            mask_expanded = mask[:, :, np.newaxis]  # Shape: (128, 128, 1)
+            mask_expanded = np.tile(mask_expanded, (1, 1, 3))  # Shape: (128, 128, 3)
+        # print(f"Shape of concat_img[{i}]:", concat_img[i].shape)  # Should be (128, 128, 3)
+        # print(f"Shape of mask_expanded for index {i}:", mask_expanded.shape)
+
+        # Apply the mask: keep RGB where mask == 1, otherwise set to black
+        concat_img[i] = concat_img[i] * mask_expanded
+    print(concat_img.shape)
+
     vid = calc_optical_flow(concat_img)
+    print(vid[30])
     print(vid.shape)
     opt_flow = True
-    size = height, height
+    size = vid.shape[1], vid.shape[2]
     # duration = 2
     fps = 30
     # save_dir = r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/vid"
-    save_dir = r"C:\Rest\Uni\14_SoSe\IRM_Prac_2\vid"
+    save_dir = r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/vid"
     # out = cv2.VideoWriter('output.mp4', cv2.VideoWriter_fourcc(*'mp4v'), fps, (size[1], size[0]), False)
     out = cv2.VideoWriter(f'{save_dir}_ownFlow.mp4', cv2.VideoWriter_fourcc(*'mp4v'), fps, (size[1], size[0]), True)
     if not opt_flow:
@@ -258,7 +364,7 @@ def own_flow(dir):
             # img_swap = np.swapaxes(img, 0, 2)
             out.write(img)
     else:
-        for flow in vid:  # flow is of shape (height, width, 2)
+        for flow in tqdm(vid):  # flow is of shape (height, width, 2)
             # Calculate the magnitude and angle of the flow
             magnitude, angle = cv2.cartToPolar(flow[..., 0], flow[..., 1])
 
@@ -288,7 +394,7 @@ def calc_optical_flow(images):
     # Initialize a list to store the optical flow for each pair of frames
     optical_flows = []
 
-    for i in range(1, num_frames):
+    for i in tqdm(range(1, num_frames)):
         # Convert frames to grayscale if they are not already
         prev_frame = cv2.cvtColor(images[i - 1], cv2.COLOR_BGR2GRAY)
         next_frame = cv2.cvtColor(images[i], cv2.COLOR_BGR2GRAY)
@@ -315,7 +421,7 @@ def calc_optical_flow(images):
     # print(f'Shape: {smoothed_frames.shape}')
     return med_flow
 
-def threshold_flow(flow, threshold=0.15):
+def threshold_flow(flow, threshold=0.0):
         # Compute the magnitude of the flow
         magnitude = np.sqrt(np.sum(flow ** 2, axis=-1, keepdims=True))
         # Create mask to fit dimensions to apply threshold
@@ -367,10 +473,10 @@ def concat_vid(dir):
     size = height, height
     # duration = 2
     fps = 30
-    save_dir = r"C:\Rest\Uni\14_SoSe\IRM_Prac_2\data_test"
+    save_dir = r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/vid"
     print('Reached')
     # out = cv2.VideoWriter('output.mp4', cv2.VideoWriter_fourcc(*'mp4v'), fps, (size[1], size[0]), False)
-    out = cv2.VideoWriter(f'{save_dir}_TrueVid.mp4', cv2.VideoWriter_fourcc(*'mp4v'), fps, (size[1], size[0]), True)
+    out = cv2.VideoWriter(f'{save_dir}_TrianleVid.mp4', cv2.VideoWriter_fourcc(*'mp4v'), fps, (size[1], size[0]), True)
     if not opt_flow:
         for img in vid:
             # data = np.random.randint(0, 256, size, dtype='uint8')
@@ -399,6 +505,34 @@ def concat_vid(dir):
             out.write(rgb)
     out.release()
     print(f'vid size: {vid.shape}')
+
+def save_img(file):
+    with h5py.File(file, "r") as f:
+        depths = f["fixed_view_left_depth"][:]
+        imgs = f["fixed_view_left"][:]
+
+        save_dir = r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/"
+
+        depth = depths[250]
+        img = imgs[250]
+
+        depth = np.nan_to_num(depth, nan=0.0, posinf=255.0, neginf=0.0)
+
+        # 2. Normalize the depth values to [0, 255] range (assuming your values range from 0 to 1)
+        depth_normalized = (depth - np.min(depth)) / (np.max(depth) - np.min(depth)) * 255.0
+
+        # 3. Clip the values to [0, 255] to avoid overflow or underflow
+        depth_normalized = np.clip(depth_normalized, 0, 255)
+
+        # 4. Cast the result to 8-bit unsigned integer
+        depth_uint8 = np.uint8(depth_normalized)
+
+        cv2.imwrite('/home/philipp/Uni/14_SoSe/IRM_Prac_2/depth.png', depth_uint8)
+        cv2.imwrite('/home/philipp/Uni/14_SoSe/IRM_Prac_2/color.png', img)
+
+
+
+
 
 def plot_tau(file):
     with h5py.File(file, "r") as f:
@@ -435,12 +569,13 @@ def plot_tau(file):
         for i in range(7):
             plt.plot(np.abs(internal_tau[:, i]), color=colors2[i], linestyle='--', label=f'Internal Tau{i+1}')
 
-        plt.plot(ext_sum, color=colors1[0], label='Summed Tau')
+        plt.plot(ext_sum, color='green', label='Summed Tau')
+        plt.plot(np.full(ext_sum.shape[0], 7), color='black',linestyle='--', label='Threshold')
 
         # Add labels and a legend
         plt.xlabel('Steps')
         plt.ylabel('Force')
-        plt.title('Plot Internal forces and the general forces')
+        plt.title('Plot Internal forces, general forces and the summed external forces as well as the threshold')
         plt.legend(loc='upper right')
 
         # Show the plot
@@ -448,15 +583,17 @@ def plot_tau(file):
 
 def save_video(file):
     with h5py.File(file, "r") as f:
-        color_bool = True
+        color_bool = False
         if color_bool:
-            key = "fixed_view_right"
+            key = "fixed_view_left"
         else:
-            key = "fixed_view_right_depth"
+            key = "fixed_view_left_depth"
         images = f[key][:]  # Assuming depth images are stored as single-channel
 
         steps, height, width = images.shape[:3]  # channels should be 1 for single-channel images
         # assert channels == 1, "Depth images should have only one channel."
+
+        print(images[1000, 175:185, 315:325])
 
         size = (width, height)
         fps = 30
@@ -465,9 +602,18 @@ def save_video(file):
 
         for img in images:
             if not color_bool:
-                # Normalize the image to 8-bit range (0-255)
+                # 1. Replace any NaN or Inf values with a valid number (e.g., 0)
+                img = np.nan_to_num(img, nan=0.0, posinf=12.0, neginf=0.0)
+
+                # 2. Normalize the depth values to [0, 255] range (assuming your values range from 0 to 1)
                 img_normalized = cv2.normalize(img, None, 0, 255, cv2.NORM_MINMAX)
-                img_uint8 = np.uint8(img_normalized)  # Convert to 8-bit unsigned integer
+
+                # 3. Clip the values to [0, 255] to avoid overflow or underflow
+                img_normalized = np.clip(img_normalized, 0, 255)
+
+                # 4. Cast the result to 8-bit unsigned integer
+                img_uint8 = np.uint8(img_normalized)
+
                 out.write(img_uint8)
             else:
                 out.write(img)
@@ -482,17 +628,20 @@ if __name__ == "__main__":
     if os.name == 'posix':
         print('Using Linux')
         # files = [r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/triangle_data/20190408_183047_triangle_0_journal_1_0_1000.h5"]
-        files = [r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/dataset", r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/flagsNdepth/vision.h5",
+        files = [r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/dataset", r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/flagsNdepth/7.h5",
                  r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/recordings/interesting_f.h5"]
 
-        # concat_vid(files[0])
+        # concat_vid(r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/triangle_data")
         # own_flow(r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/triangle_data")
+        # crop_video_square(files[1])
+        own_flow(files[1])
+        # vid_TrueFlow(r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/triangle_data")
         # plot_joint_values(files[0], "tau", joint_struc_keys)
-        # crop_video_square(files[0])
         # extract_h5_data(files)
         # read_triangle_data(files[0])
-        plot_tau(files[1])
+        # plot_tau(files[1])
         save_video(files[1])
+        # save_img(files[1])
     elif os.name == 'nt':
         print('Using Windows')
         own_flow(r"C:\Rest\Uni\14_SoSe\IRM_Prac_2\data_test\triangle_real_data\triangle_real_data")
