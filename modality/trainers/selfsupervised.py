@@ -37,7 +37,7 @@ class selfsupervised:
         self.configs = configs
         self.logger = logger
         self.device = torch.device("cuda" if use_cuda else "cpu")
-        self.tau_use = False
+        self.tau_use = True
 
         if use_cuda:
             logger.print("Let's use", torch.cuda.device_count(), "GPUs!")

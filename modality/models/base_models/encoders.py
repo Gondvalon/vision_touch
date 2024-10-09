@@ -65,10 +65,14 @@ class TauEncoder(nn.Module):
         self.z_dim = z_dim
 
         self.tau_encoder = nn.Sequential(
-            nn.Linear(7, 64),
-            nn.ReLU(),
-            nn.Linear(64, 32),
-            nn.ReLU()
+            nn.Linear(7, 32),
+            nn.LeakyReLU(0.1, inplace=True),
+            nn.Linear(32, 64),
+            nn.LeakyReLU(0.1, inplace=True),
+            nn.Linear(64, 128),
+            nn.LeakyReLU(0.1, inplace=True),
+            nn.Linear(128, 2 * self.z_dim),
+            nn.LeakyReLU(0.1, inplace=True),
         )
 
         if initailize_weights:

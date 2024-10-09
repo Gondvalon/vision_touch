@@ -247,10 +247,14 @@ def vid_TrueFlow(dir):
 
             steps, height, width, channels = images.shape
 
+    print(concat_img.shape)
+    print(concat_img[400, 60:68, 60:68, :])
     size = height, height
     fps = 30
-    # save_dir = r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/vid"
-    save_dir = r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/vid"
+    if os.name == 'posix':
+        save_dir = r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/vid"
+    elif os.name == 'nt':
+        save_dir = r"C:\Rest\Uni\14_SoSe\IRM_Prac_2\data_test\vid"
     # out = cv2.VideoWriter('output.mp4', cv2.VideoWriter_fourcc(*'mp4v'), fps, (size[1], size[0]), False)
     out = cv2.VideoWriter(f'{save_dir}TrueOpticalFlow.mp4', cv2.VideoWriter_fourcc(*'mp4v'), fps, (size[1], size[0]), True)
     for flow in concat_img:  # flow is of shape (height, width, 2)
@@ -328,45 +332,52 @@ def own_flow(dir):
         steps, height, width, channels = concat_img.shape
 
 
-    print(concat_img.shape)
+    # print(concat_img.shape)
 
     for i in tqdm(range(concat_img.shape[0])):
         concat_depth[i] = np.nan_to_num(concat_depth[i], nan=0.0, posinf=12.0, neginf=0.0)
         mask = np.where((concat_depth[i] >= 0.3) & (concat_depth[i] < 1), 1, 0).astype(np.uint8)
 
         # threshold for dark pixels
-        dark_threshold = 60
+        dark_threshold = 80
         non_dark_pixels_mask = np.any(concat_img[i] >= dark_threshold, axis=2)
 
         # Create a mask where non-dark pixels are set to 1, and dark pixels are set to 0
         dark_mask = non_dark_pixels_mask.astype(np.uint8)
+        # print(f'MASK [{mask.shape}')
+        # print(f'DArk MASK [{dark_mask.shape}')
 
         if triangle:
             # Expand the mask to shape (128 , 128, 3) to match concat_img[i]
             mask_expanded = np.repeat(mask, 3, axis=2)
+            dark_mask_expanded = dark_mask[:, :, np.newaxis]
+            dark_mask_expanded = np.repeat(dark_mask_expanded, 3, axis=2)
         else:
             mask_expanded = mask[:, :, np.newaxis]  # Shape: (128, 128, 1)
             mask_expanded = np.tile(mask_expanded, (1, 1, 3))  # Shape: (128, 128, 3)
             dark_mask_expanded = dark_mask[:, :, np.newaxis]
             dark_mask_expanded = np.tile(dark_mask_expanded, (1, 1, 3))
         # print(f"Shape of concat_img[{i}]:", concat_img[i].shape)  # Should be (128, 128, 3)
-        print(f"Shape of mask_expanded for index {i}:", mask_expanded.shape)
-        print(f'Shape Mask{dark_mask_expanded.shape}')
+        # print(f"Shape of mask_expanded for index {i}:", mask_expanded.shape)
+        # print(f'Shape Mask{dark_mask_expanded.shape}')
 
         # Apply the mask: keep RGB where mask == 1, otherwise set to black
         concat_img[i] = concat_img[i] * mask_expanded
         concat_img[i] = concat_img[i] * dark_mask_expanded
-    print(concat_img.shape)
+    # print(concat_img.shape)
 
     vid = calc_optical_flow(concat_img)
-    print(vid[30])
     print(vid.shape)
+    print(vid[400, 60:68, 60:68, :])
     opt_flow = True
     size = vid.shape[1], vid.shape[2]
     # duration = 2
     fps = 30
-    # save_dir = r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/vid"
-    save_dir = r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/vid"
+    if os.name == 'posix':
+        save_dir = r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/vid"
+    elif os.name == 'nt':
+        save_dir = r"C:\Rest\Uni\14_SoSe\IRM_Prac_2\data_test\vid"
+
     # out = cv2.VideoWriter('output.mp4', cv2.VideoWriter_fourcc(*'mp4v'), fps, (size[1], size[0]), False)
     out = cv2.VideoWriter(f'{save_dir}_ownFlow.mp4', cv2.VideoWriter_fourcc(*'mp4v'), fps, (size[1], size[0]), True)
     if not opt_flow:
@@ -480,14 +491,17 @@ def concat_vid(dir):
             steps, height, width, channels = images.shape
 
     opt_flow = False
-    vid = vid[:200]
+    # vid = vid[:200]
     size = height, height
     # duration = 2
     fps = 30
-    save_dir = r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/vid"
-    print('Reached')
+    if os.name == 'posix':
+        save_dir = r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/vid"
+    elif os.name == 'nt':
+        save_dir = r"C:\Rest\Uni\14_SoSe\IRM_Prac_2\data_test\vid"
+    # print('Reached')
     # out = cv2.VideoWriter('output.mp4', cv2.VideoWriter_fourcc(*'mp4v'), fps, (size[1], size[0]), False)
-    out = cv2.VideoWriter(f'{save_dir}_TrianleVid.mp4', cv2.VideoWriter_fourcc(*'mp4v'), fps, (size[1], size[0]), True)
+    out = cv2.VideoWriter(f'{save_dir}_concatVidImg.mp4', cv2.VideoWriter_fourcc(*'mp4v'), fps, (size[1], size[0]), True)
     if not opt_flow:
         for img in vid:
             # data = np.random.randint(0, 256, size, dtype='uint8')
@@ -655,8 +669,14 @@ if __name__ == "__main__":
         # save_img(files[1])
     elif os.name == 'nt':
         print('Using Windows')
-        own_flow(r"C:\Rest\Uni\14_SoSe\IRM_Prac_2\data_test\triangle_real_data\triangle_real_data")
-        # concat_vid(r"C:\Rest\Uni\14_SoSe\IRM_Prac_2\data_test\triangle_real_data\triangle_real_data")
+        files = [r"C:\Rest\Uni\14_SoSe\IRM_Prac_2\data_test\test\3.h5",
+                 r"C:\Rest\Uni\14_SoSe\IRM_Prac_2\data_test\triangle_real_data\triangle_real_data",
+                 r"C:\Rest\Uni\14_SoSe\IRM_Prac_2\data_test\new_dataset"
+                 ]
+        vid_TrueFlow(files[2])
+        # own_flow(r"C:\Rest\Uni\14_SoSe\IRM_Prac_2\data_test\new_dataset")
+        # own_flow(files[0])
+        concat_vid(files[2])
         # plot_proprio(r"C:\Rest\Uni\14_SoSe\IRM_Prac_2\data_test\triangle_real_data\triangle_real_data")
         # concat_vid(r"C:\Rest\Uni\14_SoSe\IRM_Prac_2\data_test\triangle_real_data\triangle_real_data")
     else:

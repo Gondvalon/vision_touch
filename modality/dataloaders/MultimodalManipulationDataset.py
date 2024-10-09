@@ -18,7 +18,7 @@ class MultimodalManipulationDataset(Dataset):
         n_time_steps=1,
         action_dim=4,
         pairing_tolerance=0.06,
-        tau_use = False
+        tau_use = True
     ):
         """
         Args:
@@ -130,6 +130,7 @@ class MultimodalManipulationDataset(Dataset):
             else:
                 sample["tau"] = tau
                 sample["unpaired_tau"] = unpaired_tau
+                sample["contact_next"] = np.array([np.abs(dataset["tau_ext"][dataset_index + 1]).sum() > 7.0]).astype(np.float64)
 
 
         dataset.close()

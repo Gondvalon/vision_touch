@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 import h5py
 import numpy as np
 import cv2
@@ -14,9 +13,9 @@ class CreateDatasetFromRecord():
         self.dataset_dir = dataset_dir
         self.recording_dir = recording_dir
 
-        self.allow_short_set = True
+        self.allow_short_set = False
         # starting index to make the frames square, goes from this index + height
-        self.square_idx = 0
+        self.square_idx = 140
         # frequency which was used to collect the data
         self.collection_freq = 30
 
@@ -48,11 +47,13 @@ class CreateDatasetFromRecord():
         for i, file in tqdm(enumerate(files), desc= 'Processing recordings'):
             with h5py.File(file, "r") as f:
                 images = f[self.keys[0]][:]
+                depths = f[self.keys[7]][:]
 
                 # shape of recordings is frames, height, width, channels
                 num_entries = images.shape[0]
                 # there must be 1000 datapoints to create dataset properly
-                if num_entries <= 1001 and not self.allow_short_set:
+                if num_entries <= 1151 and not self.allow_short_set:
+                    print(f'File is too short: {file}')
                     continue
                 else:
                     num_entries = num_entries - 1
@@ -60,50 +61,83 @@ class CreateDatasetFromRecord():
                 print(f'There will get {self.num_subfiles} sub files created')
 
                 # reshape and downsample images
-                images = images[:(self.num_subfiles * 50) + 1, :, self.square_idx:(self.square_idx + images.shape[1]), :]
+                images = images[-(self.num_subfiles * 50) - 51:-50, :, self.square_idx:(self.square_idx + images.shape[1]), :]
+                images = images[:, 20:-20, 20:-20,:]
+                depths = depths[-(self.num_subfiles * 50) - 51:-50, :, self.square_idx:(self.square_idx + images.shape[1])]
+                depths = depths[:, 20:-20, 20:-20]
+
                 downsampled_images = []
-                for frame in images:
+                downsampled_depths = []
+                for j in range(images.shape[0]):
                     # Resize the frame using cv2.resize
-                    resized_frame = cv2.resize(frame, (128, 128), interpolation=cv2.INTER_LINEAR)
-                    downsampled_images.append(resized_frame)
+                    resized_img_frame = cv2.resize(images[j], (128, 128), interpolation=cv2.INTER_LINEAR)
+                    resized_depth_frame = cv2.resize(depths[j], (128, 128), interpolation=cv2.INTER_LINEAR)
+                    downsampled_images.append(resized_img_frame)
+                    downsampled_depths.append(resized_depth_frame)
 
                 joint_pos_struc = f[self.keys[1]][:]
                 joint_vel_struc = f[self.keys[2]][:]
                 ee_pos_struc = f[self.keys[3]][:]
                 ee_ori_struc = f[self.keys[4]][:]
                 tau_struc = f[self.keys[5]][:]
+                tau_ext = f[self.keys[6]][:]
 
                 # convert structs into np arrays
                 joint_pos_l = []
                 joint_vel_ori_l = []
                 ee_pos_l = []
                 ee_ori_l = []
-                tau_l = []
                 for j in range(num_entries + 1):
                     joint_pos = [joint_pos_struc['j0'][j], joint_pos_struc['j1'][j], joint_pos_struc['j2'][j], joint_pos_struc['j3'][j],
                                  joint_pos_struc['j4'][j], joint_pos_struc['j5'][j], joint_pos_struc['j6'][j]]
                     joint_vel_ori = [joint_vel_struc['j0'][j], joint_vel_struc['j1'][j], joint_vel_struc['j2'][j], joint_vel_struc['j3'][j],
                                  joint_vel_struc['j4'][j], joint_vel_struc['j5'][j], joint_vel_struc['j6'][j]]
-                    tau = [tau_struc['j0'][j], tau_struc['j1'][j], tau_struc['j2'][j], tau_struc['j3'][j], tau_struc['j4'][j],
-                           tau_struc['j5'][j], tau_struc['j6'][j]]
                     ee_pos = [ee_pos_struc['x'][j], ee_pos_struc['y'][j], ee_pos_struc['z'][j]]
                     ee_ori = [ee_ori_struc['x'][j], ee_ori_struc['y'][j], ee_ori_struc['z'][j],ee_ori_struc['w'][j]]
 
                     joint_pos_l.append(joint_pos)
                     joint_vel_ori_l.append(joint_vel_ori)
-                    tau_l.append(tau)
                     ee_pos_l.append(ee_pos)
                     ee_ori_l.append(ee_ori)
 
                 images = np.array(downsampled_images)
+                depths = np.array(downsampled_depths)
                 joint_pos_np = np.array(joint_pos_l)
                 joint_vel_ori_np = np.array(joint_vel_ori_l)
-                tau_np = np.array(tau_l)
+                tau_np = np.array(tau_struc)
+                tau_ext_np = np.array(tau_ext)
                 ee_pos_np = np.array(ee_pos_l)
                 ee_ori_np = np.array(ee_ori_l)
                 ee_ori_np = ee_ori_np / np.linalg.norm(ee_ori_np, axis=1, keepdims=True)  # Normalize quaternions
 
-                optical_flow_np = self.calc_optical_flow(images)
+                # created masked images for improved optical flow
+                masked_images = np.copy(images)
+                print(masked_images.shape)
+                for j in range(masked_images.shape[0]):
+                    depths[j] = np.nan_to_num(depths[j], nan=0.0, posinf=12.0, neginf=0.0)
+
+                    depth_mask = np.where((depths[j] >= 0.3) & (depths[j] < 1), 1, 0).astype(np.uint8)
+
+                    # threshold for dark pixels
+                    dark_threshold = 80
+                    non_dark_pixels_mask = np.any(masked_images[j] >= dark_threshold, axis=2)
+
+                    # Create a mask where non-dark pixels are set to 1, and dark pixels are set to 0
+                    dark_mask = non_dark_pixels_mask.astype(np.uint8)
+
+                    depth_mask_expanded = depth_mask[:, :, np.newaxis]  # Shape: (128, 128, 1)
+                    depth_mask_expanded = np.tile(depth_mask_expanded, (1, 1, 3))  # Shape: (128, 128, 3)
+                    dark_mask_expanded = dark_mask[:, :, np.newaxis]
+                    dark_mask_expanded = np.tile(dark_mask_expanded, (1, 1, 3))
+
+                    # Apply the mask: keep RGB where mask == 1, otherwise set to black
+                    masked_images[j] = masked_images[j] * depth_mask_expanded
+                    masked_images[j] = masked_images[j] * dark_mask_expanded
+
+                optical_flow_np = self.calc_optical_flow(masked_images)
+
+                # reshape depth
+                depths = depths.reshape(depths.shape[0], depths.shape[1], depths.shape[2], 1)
 
                 ee_vel_np, ee_vel_ori_np, ee_pos_diff = self.calc_ee_velo(ee_pos_np, ee_ori_np)
                 # yaw is in euler angles(radians) while the other two are quaternions
@@ -113,26 +147,29 @@ class CreateDatasetFromRecord():
                 action_np = np.hstack((ee_pos_diff, yaw_diff_np))
                 proprio_np = np.hstack((ee_pos_np[:-1], yaw_np[:-1], ee_vel_np, yaw_vel_np))
 
-
+                # this index shows where the data is started. From there 1000 steps will be divided in 20 files
+                start_idx = -(self.num_subfiles * 50) - 51
                 # iterate over the number of files that shall get created for the dataset
                 for j in range(self.num_subfiles):
                     filename = self.dataset_name + "_" + str(i) + "_" + str(j) + "_1000.h5"
                     filepath = os.path.join(self.dataset_dir, filename)
                     with h5py.File(filepath, 'w') as h5file:
                         # create datasets
-                        h5file.create_dataset('proprio', data=proprio_np[j * self.data_per_file:(j + 1) * self.data_per_file])
-                        h5file.create_dataset('action', data=action_np[j * self.data_per_file:(j + 1) * self.data_per_file])
-                        h5file.create_dataset('tau', data=tau_np[j * self.data_per_file:(j + 1) * self.data_per_file])
+                        h5file.create_dataset('proprio', data=proprio_np[start_idx + j * self.data_per_file:start_idx + (j + 1) * self.data_per_file])
+                        h5file.create_dataset('action', data=action_np[start_idx + j * self.data_per_file:start_idx + (j + 1) * self.data_per_file])
+                        h5file.create_dataset('tau', data=tau_np[start_idx + j * self.data_per_file:start_idx + (j + 1) * self.data_per_file])
+                        h5file.create_dataset('tau_ext', data=tau_ext_np[start_idx + j * self.data_per_file:start_idx + (j + 1) * self.data_per_file])
                         h5file.create_dataset('image', data=images[j * self.data_per_file:(j+1) * self.data_per_file])
+                        h5file.create_dataset('depth_data', data=depths[j * self.data_per_file:(j+1) * self.data_per_file])
                         h5file.create_dataset('optical_flow', data=optical_flow_np[j * self.data_per_file:(j+1) * self.data_per_file])
-                        h5file.create_dataset('joint_pos', data=joint_pos_np[j * self.data_per_file:(j+1) * self.data_per_file])
-                        h5file.create_dataset('joint_vel_ori', data=joint_vel_ori_np[j * self.data_per_file:(j+1) * self.data_per_file])
-                        h5file.create_dataset('ee_pos', data=ee_pos_np[j * self.data_per_file:(j+1) * self.data_per_file])
-                        h5file.create_dataset('ee_ori', data=ee_ori_np[j * self.data_per_file:(j+1) * self.data_per_file])
-                        h5file.create_dataset('ee_pos_vel', data=ee_vel_np[j * self.data_per_file:(j + 1) * self.data_per_file])
-                        h5file.create_dataset('ee_vel_ori',data=ee_vel_ori_np[j * self.data_per_file:(j + 1) * self.data_per_file])
-                        h5file.create_dataset('ee_yaw', data=ee_yaw_np[j * self.data_per_file:(j + 1) * self.data_per_file])
-                        h5file.create_dataset('ee_yaw_delta', data=ee_yaw_delta_np[j * self.data_per_file:(j + 1) * self.data_per_file])
+                        h5file.create_dataset('joint_pos', data=joint_pos_np[start_idx + j * self.data_per_file:start_idx + (j + 1) * self.data_per_file])
+                        h5file.create_dataset('joint_vel_ori', data=joint_vel_ori_np[start_idx + j * self.data_per_file:start_idx + (j + 1) * self.data_per_file])
+                        h5file.create_dataset('ee_pos', data=ee_pos_np[start_idx + j * self.data_per_file:start_idx + (j + 1) * self.data_per_file])
+                        h5file.create_dataset('ee_ori', data=ee_ori_np[start_idx + j * self.data_per_file:start_idx + (j + 1) * self.data_per_file])
+                        h5file.create_dataset('ee_pos_vel', data=ee_vel_np[start_idx + j * self.data_per_file:start_idx + (j + 1) * self.data_per_file])
+                        h5file.create_dataset('ee_vel_ori',data=ee_vel_ori_np[start_idx + j * self.data_per_file:start_idx + (j + 1) * self.data_per_file])
+                        h5file.create_dataset('ee_yaw', data=ee_yaw_np[start_idx + j * self.data_per_file:start_idx + (j + 1) * self.data_per_file])
+                        h5file.create_dataset('ee_yaw_delta', data=ee_yaw_delta_np[start_idx + j * self.data_per_file:start_idx + (j + 1) * self.data_per_file])
 
                         # h5file.create_dataset('dataset2', data=data2, dtype='float64')
 
@@ -222,21 +259,20 @@ class CreateDatasetFromRecord():
         for i in range(optical_flows.shape[0]):
             optical_flows[i] = self.normalize_optical_flow(optical_flows[i])
 
-        # apply threshold
+        # smoothe flow over 3 frames
         thresh_flow = self.threshold_flow(optical_flows)
-        # apply median filter over three frames
         med_flow = self.apply_median_filter(thresh_flow)
 
         return med_flow
 
-        def threshold_flow(self, flow, threshold=0.15):
-            # Compute the magnitude of the flow
-            magnitude = np.sqrt(np.sum(flow ** 2, axis=-1, keepdims=True))
-            # Create mask to fit dimensions to apply threshold
-            mask = magnitude < threshold
-            # Apply threshold: zero out flow vectors with small magnitudes
-            flow[mask.repeat(2, axis=-1)] = 0
-            return flow
+    def threshold_flow(self, flow, threshold=0.0):
+        # Compute the magnitude of the flow
+        magnitude = np.sqrt(np.sum(flow ** 2, axis=-1, keepdims=True))
+        # Create mask to fit dimensions to apply threshold
+        mask = magnitude < threshold
+        # Apply threshold: zero out flow vectors with small magnitudes
+        flow[mask.repeat(2, axis=-1)] = 0
+        return flow
 
     def apply_median_filter(self, flow_frames, size=3):
         filtered_flow = np.copy(flow_frames)
@@ -269,7 +305,7 @@ if __name__ == "__main__":
     if os.name == 'nt':
         print('Using Windows system')
         DATASET_DIR = r'C:\Rest\Uni\14_SoSe\IRM_Prac_2\data_test\new_dataset'
-        RECORDING_DIR = r'C:\Rest\Uni\14_SoSe\IRM_Prac_2\data_test'
+        RECORDING_DIR = r'C:\Rest\Uni\14_SoSe\IRM_Prac_2\data_test\recordings'
     elif os.name == 'posix':
         print('Using Linux system')
         RECORDING_DIR = r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/recordings"
