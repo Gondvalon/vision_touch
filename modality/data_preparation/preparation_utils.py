@@ -334,17 +334,28 @@ def own_flow(dir):
         concat_depth[i] = np.nan_to_num(concat_depth[i], nan=0.0, posinf=12.0, neginf=0.0)
         mask = np.where((concat_depth[i] >= 0.3) & (concat_depth[i] < 1), 1, 0).astype(np.uint8)
 
+        # threshold for dark pixels
+        dark_threshold = 60
+        non_dark_pixels_mask = np.any(concat_img[i] >= dark_threshold, axis=2)
+
+        # Create a mask where non-dark pixels are set to 1, and dark pixels are set to 0
+        dark_mask = non_dark_pixels_mask.astype(np.uint8)
+
         if triangle:
             # Expand the mask to shape (128 , 128, 3) to match concat_img[i]
             mask_expanded = np.repeat(mask, 3, axis=2)
         else:
             mask_expanded = mask[:, :, np.newaxis]  # Shape: (128, 128, 1)
             mask_expanded = np.tile(mask_expanded, (1, 1, 3))  # Shape: (128, 128, 3)
+            dark_mask_expanded = dark_mask[:, :, np.newaxis]
+            dark_mask_expanded = np.tile(dark_mask_expanded, (1, 1, 3))
         # print(f"Shape of concat_img[{i}]:", concat_img[i].shape)  # Should be (128, 128, 3)
-        # print(f"Shape of mask_expanded for index {i}:", mask_expanded.shape)
+        print(f"Shape of mask_expanded for index {i}:", mask_expanded.shape)
+        print(f'Shape Mask{dark_mask_expanded.shape}')
 
         # Apply the mask: keep RGB where mask == 1, otherwise set to black
         concat_img[i] = concat_img[i] * mask_expanded
+        concat_img[i] = concat_img[i] * dark_mask_expanded
     print(concat_img.shape)
 
     vid = calc_optical_flow(concat_img)
@@ -583,7 +594,7 @@ def plot_tau(file):
 
 def save_video(file):
     with h5py.File(file, "r") as f:
-        color_bool = False
+        color_bool = True
         if color_bool:
             key = "fixed_view_left"
         else:
@@ -593,7 +604,7 @@ def save_video(file):
         steps, height, width = images.shape[:3]  # channels should be 1 for single-channel images
         # assert channels == 1, "Depth images should have only one channel."
 
-        print(images[1000, 175:185, 315:325])
+        print(images[1000, 340, :])
 
         size = (width, height)
         fps = 30
