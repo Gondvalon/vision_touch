@@ -1,10 +1,10 @@
-##Executing Code
--Check .config in the /configs folder if it is set correctly, especially the dataset path which is relative to the /trainers directory
--Check the shell file in the /scripts folder if it is correct and if the path to the correct config file is properly set
--Execute the shell file in the /scripts folder
--Logging will get saved in the /scripts folder at this time
+## Executing Code
+- Check .config in the /configs folder if it is set correctly, especially the dataset path which is relative to the /trainers directory
+- Check the shell file in the /scripts folder if it is correct and if the path to the correct config file is properly set
+- Execute the shell file in the /scripts folder
+- Logging will get saved in the /scripts folder at this time
 
-##IMPORTANT FILES
+## IMPORTANT FILES
 For loading a Dataset the /dataloaders/MultimodalManipulationDataset.py file is responsible
 The get_single() method is mostly used to load the data directly from the dataset
 
