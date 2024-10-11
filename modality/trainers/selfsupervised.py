@@ -7,6 +7,15 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import os
+
+#
+import h5py
+import numpy as np
+# import ipdb
+from tqdm import tqdm
+from torch.utils.data import Dataset
+#
+
 from tqdm import tqdm
 
 from models.sensor_fusion import SensorFusionSelfSupervised
@@ -245,6 +254,7 @@ class selfsupervised:
         # labels to predict
         gt_ee_pos_delta = sampled_batched["ee_yaw_next"].to(self.device)
 
+        # model input here
         if self.deterministic:
             paired_out, contact_out, flow2, optical_flow2_mask, ee_delta_out, mm_feat = self.model(
                 image, force, proprio, depth, action, tau
@@ -523,3 +533,104 @@ class selfsupervised:
         concat_image = concat_image.transpose(2, 0, 1)
 
         self.logger.tb.add_image(string + "predicted_flow", concat_image, global_cnt)
+
+#######################################
+    def load_demo(self, demo_path):
+        # TODO: proper precoessing of data is missing
+        # (optical flow)
+
+        dataset = h5py.File(demo_path, "r", swmr=True, libver="latest")
+        # if self.training_type == "selfsupervised":
+
+        image = np.array(dataset["fixed_view_left"])
+        depth = np.array(dataset["fixed_view_left_depth"])
+        proprio = np.array(dataset["JointState"])
+        tau = np.array(dataset["tau"])
+
+        # todo: what is action in our case
+        action = None
+        # action = np.array(dataset["action_key"])
+
+        # old
+        # image = dataset["fixed_view_left"].to(self.device)
+        # depth = dataset["fixed_view_left_depth"][dataset_index]
+        # proprio = dataset["JointState"][dataset_index][:8]
+        # tau = dataset["tau"][dataset_index]
+
+        if image.shape[0] == 3:
+            image = np.transpose(image, (2, 1, 0))
+
+        if depth.ndim == 2:
+            depth = depth.reshape((128, 128, 1))
+
+        # todo add optical flow for label to compare @philipp
+        # flow = np.array(dataset["optical_flow"][dataset_index])
+        # # this mask is showing where the sum of the flow is not zero and gets marked with a 1
+        # flow_mask = np.expand_dims(
+        #     np.where(
+        #         flow.sum(axis=2) == 0,
+        #         np.zeros_like(flow.sum(axis=2)),
+        #         np.ones_like(flow.sum(axis=2)),
+        #     ),
+        #     2,
+        # )
+
+
+        demo = {
+            "image": image,
+            "depth": depth,
+            # "flow": flow,
+            # "flow_mask": flow_mask,
+            "action": action,
+            "proprio": proprio,
+            # todo add ee_next if possible
+            # "ee_yaw_next": dataset["proprio"][dataset_index + 1][:self.action_dim],
+            # "unpaired_image": unpaired_image,
+            # "unpaired_proprio": unpaired_proprio,
+            # "unpaired_depth": unpaired_depth,
+        }
+
+        demo["tau"] = tau
+        # sample["contact_next"] = np.array([np.abs(dataset["tau_ext"][dataset_index + 1]).sum() > 7.0]).astype(
+        #     np.float64)
+
+        dataset.close()
+
+        return demo
+
+
+    def eval_demo(self, demo_path):
+        # load h5 file
+        eval_data = self.load_demo(demo_path)
+
+        # TODO: inference with model - > check loss calc
+        # make arrays to torch tensors
+        image = torch.from_numpy(eval_data["image"]).to(self.device)
+
+
+        # todo what force data?
+        force = torch.from_numpy(eval_data["tau"]).to(self.device)
+        depth = torch.from_numpy(eval_data["depth"]).to(self.device)
+        proprio = torch.from_numpy(eval_data["proprio"]).to(self.device)
+
+        # extract proper action from h5 file
+        action = torch.from_numpy(eval_data["action"]).to(self.device)
+        tau = torch.from_numpy(eval_data["tau"]).to(self.device)
+
+        # add aplha like in loss_calc?
+
+        # model
+        if self.deterministic:
+            paired_out, contact_out, flow2, optical_flow2_mask, ee_delta_out, mm_feat = self.model(
+                image, force, proprio, depth, action, tau
+            )
+            kl = torch.tensor([0]).to(self.device).type(torch.cuda.FloatTensor)
+        else:
+            paired_out, contact_out, flow2, optical_flow2_mask, ee_delta_out, mm_feat, mu_z, var_z, mu_prior, var_prior = self.model(
+                image, force, proprio, depth, action, tau
+            )
+            kl = self.alpha_kl * torch.mean(
+                kl_normal(mu_z, var_z, mu_prior.squeeze(0), var_prior.squeeze(0))
+            )
+
+        # todo: log output of model and visualize
