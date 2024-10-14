@@ -627,10 +627,10 @@ def save_video(file):
     with h5py.File(file, "r") as f:
         color_bool = True
         if color_bool:
-            key = "image"
+            key = "fixed_view_left"
         else:
             key = "fixed_view_left_depth"
-        images = f[key][150:]  # Assuming depth images are stored as single-channel
+        images = f[key][:]  # Assuming depth images are stored as single-channel
 
         steps, height, width = images.shape[:3]  # channels should be 1 for single-channel images
         # assert channels == 1, "Depth images should have only one channel."
