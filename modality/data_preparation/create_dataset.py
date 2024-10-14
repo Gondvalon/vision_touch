@@ -8,6 +8,9 @@ from tqdm import tqdm
 from scipy.spatial.transform import Rotation as R
 from scipy.ndimage import median_filter
 
+'''
+This class is used to create a dataset from a directory of h5 files which at least hold the values noted in self.keys
+'''
 class CreateDatasetFromRecord():
     def __init__(self, dataset_dir, recording_dir):
         self.dataset_dir = dataset_dir
@@ -41,6 +44,7 @@ class CreateDatasetFromRecord():
 
         self.create_dataset(self.recordings_l)
 
+    # This function takes a list of file name pathes and iterates over them to create a dataset where each file holds 50 values
     def create_dataset(self, files):
         # iterate over all recordings
         self.num_recordings = len(files)
@@ -228,7 +232,6 @@ class CreateDatasetFromRecord():
         ee_pos_diff = np.diff(ee_pos, axis=0)
         ee_pos_vel = ee_pos_diff / dt
 
-        # calculate quaternion velocities
         # function to compute quaternion difference
         def quaternion_difference(q1, q2):
             # Quaternion multiplication q_diff = q1_inverse * q2

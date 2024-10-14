@@ -39,10 +39,6 @@ if __name__ == "__main__":
     if not just_eval:
         trainer.train()
 
-    # TODO: specify configs["load"] -> to load already trained model
-
     # eval single demo file or multiple
-    # todo check good demo for report etc.
-    # demo_path = "/home/rickmer/Documents/Vision_Touch_pjahr/pearl_eval_data/0.h5"
     demo_path = "/mnt/c/Rest/Uni/14_SoSe/IRM_Prac_2/data_test/new_dataset/concat_set.h5"
     trainer.eval_demo(demo_path)

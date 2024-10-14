@@ -6,13 +6,14 @@ import h5py
 import numpy as np
 import cv2
 
+
+'''
+This function takes a logging folder as input and returns a plot of all the losses
+'''
 def plot_losses(dir):
     # Load the TensorBoard event logs
     event_acc = EventAccumulator(dir)
     event_acc.Reload()
-
-    # print available tags
-    print(event_acc.Tags())
 
     # retrieve scalar metrics from TensorBoard
     contact_loss = event_acc.Scalars('loss/contact')
@@ -84,6 +85,10 @@ def plot_losses(dir):
     plt.savefig('../../../plots/loss_plot_own_data.png')  # Uncomment to save as PNG
     plt.show()
 
+'''
+This function takes the result of an inference and plots the predictions and original values as well as creates a video
+for the predicted and ground truth optical flow.
+'''
 def plot_predictions(file):
     with h5py.File(file, "r") as f:
         contact_in = np.array(f["contact_label"][:])
@@ -127,17 +132,17 @@ def plot_predictions(file):
         save_video(flow_pred[150:], "flow_pred")
 
 
-
+'''
+This function takes a numpy array with the shape (samples, 128, 128, 2) and saves the resulting video to the filename
+'''
 def save_video(vid, filename):
     images = vid
 
     steps, height, width = images.shape[:3]  # channels should be 1 for single-channel images
-    # assert channels == 1, "Depth images should have only one channel."
-
-    # print(images[1000, 340, :])
 
     size = (128, 128)
     fps = 30
+    # make sure to adjust the paths properly
     if os.name == 'posix':
         save_dir = r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/flagsNdepth"
     elif os.name == 'nt':

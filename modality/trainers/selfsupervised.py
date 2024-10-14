@@ -538,11 +538,7 @@ class selfsupervised:
 
 #######################################
     def load_demo(self, demo_path):
-        # TODO: proper precoessing of data is missing
-        # (optical flow)
-
         dataset = h5py.File(demo_path, "r", swmr=True, libver="latest")
-        # if self.training_type == "selfsupervised":
 
         image = np.array(dataset["image"])
         depth = np.array(dataset["depth_data"])
@@ -550,10 +546,8 @@ class selfsupervised:
         tau = np.array(dataset["tau"])
         action = np.array(dataset["action"])
         flow = np.array(dataset["optical_flow"])
-        ee_yaw_next =  np.array(dataset["ee_yaw_delta"])
         tau_ext = np.array(dataset["tau_ext"])
 
-        # todo: what is action in our case
         if image.shape[0] == 3:
             image = np.transpose(image, (2, 1, 0))
 
@@ -579,14 +573,7 @@ class selfsupervised:
             "proprio": proprio,
             "tau": tau,
             "tau_ext": tau_ext,
-
-            # todo add ee_next if possible
-            # "ee_yaw_next": dataset["proprio"][dataset_index + 1][:self.action_dim],
         }
-
-        # demo["tau"] = tau
-        # demo["contact_next"] = np.array([np.abs(dataset["tau_ext"][dataset_index + 1]).sum() > 7.0]).astype(
-        #     np.float64)
 
         dataset.close()
 
@@ -597,23 +584,18 @@ class selfsupervised:
         # load h5 file
         eval_data = self.load_demo(demo_path)
 
-        # TODO: inference with model - > check loss calc
         # make arrays to torch tensors
         image = torch.from_numpy(eval_data["image"]).to(self.device)
 
 
-        # todo what force data?
-        # force = torch.from_numpy(eval_data["tau"]).to(self.device)
         depth = torch.from_numpy(eval_data["depth"]).to(self.device).transpose(1, 3).transpose(2, 3)
         proprio = torch.from_numpy(eval_data["proprio"]).to(self.device).float()
-        force = None
-
-        # extract proper action from h5 file
         action = torch.from_numpy(eval_data["action"]).to(self.device).float()
+
+        # either force or tau have to be None
+        force = None
         tau = torch.from_numpy(eval_data["tau"]).to(self.device).float()
 
-        # add aplha like in loss_calc?
-        print(f'Depth shape: {depth.shape}')
         # model
         if self.deterministic:
             paired_out, contact_out, flow2, optical_flow2_mask, ee_delta_out, mm_feat = self.model(
@@ -628,7 +610,6 @@ class selfsupervised:
                 kl_normal(mu_z, var_z, mu_prior.squeeze(0), var_prior.squeeze(0))
             )
 
-        # todo: log output of model and visualize
         abs_sum = np.sum(np.abs(eval_data["tau_ext"]), axis=1)
         contact_label = (abs_sum > 7.).astype(int).reshape(-1, 1)
 

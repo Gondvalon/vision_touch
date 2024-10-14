@@ -35,6 +35,9 @@ def plot_joint_values(file, value, struc_keys):
         plt.grid(True)
         plt.show()
 
+'''
+This function can plot the proprioception from the original dataset and takes a directory with files with the same style as it
+'''
 def plot_proprio(dir):
     sorted = sort_set(dir)
     i = 0
@@ -117,7 +120,10 @@ def crop_video_square(file):
             out.write(img)
         out.release()
 
-# helps to decide the visible frame of the cropped video
+'''
+This function is used to check for the proper frame for cutting. It offers a frame and and a square area can be chosen from it.
+The indice can be read from the command line to be used in the create_dataset.py file
+'''
 def choose_start(frame):
     height, width, channels = frame.shape
 
@@ -152,6 +158,9 @@ def choose_start(frame):
 
     cv2.destroyAllWindows()
 
+'''
+This function is used to extract data from an h5 file which has the given struct as seen within the function itself
+'''
 def extract_h5_data(files):
     for file in files:
         with h5py.File(file, "r") as f:
@@ -189,17 +198,6 @@ def extract_h5_data(files):
             plt.grid(True)
             plt.show()
 
-def read_triangle_data(file):
-    with h5py.File(file, "r") as f:
-        print("-----------------------------------------------------")
-        print(f"keys in file: {file}:")
-        for key, value in f.items():
-            print(f"key: {key}")
-            print(f"value: {value}")
-            data = f[key][:4]
-            print(f'This is the data: {data}')
-        print("-----------------------------------------------------")
-
 def list_files_in_directory(directory):
     file_list = []
     for root, _, files in os.walk(directory):
@@ -209,6 +207,9 @@ def list_files_in_directory(directory):
     # print(file_list)
     return file_list
 
+'''
+Due to the way the dataset is organized with 20 files creating one set, this function creates a list of all files belonging to the defined set
+'''
 def sort_set(dir):
     set = '0'
     files_l = list_files_in_directory(dir)
@@ -231,6 +232,9 @@ def sort_set(dir):
     print(f'Sorted: {sorted}')
     return sorted
 
+'''
+This function returns the optical flow from the triangle dataset
+'''
 def vid_TrueFlow(dir):
     sorted = sort_set(dir)
     i = 0
@@ -282,7 +286,10 @@ def vid_TrueFlow(dir):
 
 
 
-# sorts a dataset video in the correct order and returns a list
+'''
+This function calculates the optical flow either from the original dataset or from a single self recorded dataset.
+The bool triangle decided which will be the case.
+'''
 def own_flow(dir):
     triangle = False
     if triangle:
@@ -356,9 +363,6 @@ def own_flow(dir):
             mask_expanded = np.tile(mask_expanded, (1, 1, 3))  # Shape: (128, 128, 3)
             dark_mask_expanded = dark_mask[:, :, np.newaxis]
             dark_mask_expanded = np.tile(dark_mask_expanded, (1, 1, 3))
-        # print(f"Shape of concat_img[{i}]:", concat_img[i].shape)  # Should be (128, 128, 3)
-        # print(f"Shape of mask_expanded for index {i}:", mask_expanded.shape)
-        # print(f'Shape Mask{dark_mask_expanded.shape}')
 
         # Apply the mask: keep RGB where mask == 1, otherwise set to black
         concat_img[i] = concat_img[i] * mask_expanded
@@ -367,8 +371,6 @@ def own_flow(dir):
 
 
     vid = calc_optical_flow(concat_img)
-    print(vid.shape)
-    print(vid[400, 60:68, 60:68, :])
     opt_flow = True
     size = vid.shape[1], vid.shape[2]
     # duration = 2
@@ -478,6 +480,9 @@ def normalize_optical_flow(flow):
 
     return normalized_flow
 
+'''
+This function returns the video that results from the one set of the dataset
+'''
 def concat_vid(dir):
     sorted = sort_set(dir)
     i = 0
@@ -535,6 +540,10 @@ def concat_vid(dir):
     out.release()
     print(f'vid size: {vid.shape}')
 
+
+'''
+This function saves a depth image and RGB image from a given file
+'''
 def save_img(file):
     with h5py.File(file, "r") as f:
         depths = f["fixed_view_left_depth"][:]
@@ -559,10 +568,9 @@ def save_img(file):
         cv2.imwrite('/home/philipp/Uni/14_SoSe/IRM_Prac_2/depth.png', depth_uint8)
         cv2.imwrite('/home/philipp/Uni/14_SoSe/IRM_Prac_2/color.png', img)
 
-
-
-
-
+'''
+This function plots the tau and external tau values as well as the summed tau values and the internal tau values
+'''
 def plot_tau(file):
     with h5py.File(file, "r") as f:
         tau = f['tau'][:]
@@ -610,6 +618,11 @@ def plot_tau(file):
         # Show the plot
         plt.show()
 
+
+
+'''
+This function either plots the rgb or depth data of a file
+'''
 def save_video(file):
     with h5py.File(file, "r") as f:
         color_bool = True
@@ -652,6 +665,9 @@ def save_video(file):
 
         out.release()
 
+
+'''
+This function creates a single h5 file of one set within the given dataset folder named dir'''
 def concat_dataset(dir, output_file):
     sorted = sort_set(dir)
     i = 0
