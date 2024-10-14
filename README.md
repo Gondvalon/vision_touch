@@ -1,8 +1,17 @@
-## Executing Code
+## Executing Code For Training
 - Check .config in the /configs folder if it is set correctly, especially the dataset path which is relative to the /trainers directory
 - Check the shell file in the /scripts folder if it is correct and if the path to the correct config file is properly set
 - Execute the shell file in the /scripts folder
 - Logging will get saved in the /scripts folder at this time
+
+## Executing Code For Inference
+- Check .config file in the corresponding folder to have the right path. IMPORTANT: Set a load path with a checkpoint file
+- Check the shell file for evaluation if set properly
+- Execute the shell file to run the inference
+- Resulting predictions will be in an h5 file within the scripts folder
+
+## Evaluation
+To evaluate training or predictions use the corresponding evaluation.py file
 
 ## IMPORTANT FILES
 For loading a Dataset the /dataloaders/MultimodalManipulationDataset.py file is responsible
