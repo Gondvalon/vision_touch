@@ -11,3 +11,7 @@ The get_single() method is mostly used to load the data directly from the datase
 The /trainers/selfsupervised.py file is the main part of the network. It holds the training loop, the validation loo, the loss calculation and the dataset initialization.
 
 The networks are in the /models folder. Here, the sensor_fusion.py file holds the encoding for the final modality vector while the /base_models holds the encoder.py and the decoder.py to encode the different modalities or decode different values from the final vector again.
+
+## Resulting gifs for the optical flow
+![This gif shows the ground truth optical flow which the network should have predicted](result_gif/gif_flow.gif)
+![This gif is the predicted optical flow from the network, upsampled to the same size as the ground truth](result_gif/gif_flow_pred.gif)
