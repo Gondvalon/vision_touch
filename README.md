@@ -24,6 +24,6 @@ The networks are in the /models folder. Here, the sensor_fusion.py file holds th
 ## Resulting gifs for the optical flow
 Ground truth and predicted Optical flow
 
-
+![This gif shows the original video](result_gif/trueVid.gif)
 ![This gif shows the ground truth optical flow which the network should have predicted](result_gif/gif_flow.gif)
 ![This gif is the predicted optical flow from the network, upsampled to the same size as the ground truth](result_gif/gif_flow_pred.gif)
