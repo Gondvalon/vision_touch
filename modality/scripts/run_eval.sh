@@ -1,0 +1,1 @@
+python ../main_eval.py --config ../configs/training_default.yaml

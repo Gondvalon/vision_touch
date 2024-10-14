@@ -47,6 +47,7 @@ class selfsupervised:
         self.logger = logger
         self.device = torch.device("cuda" if use_cuda else "cpu")
         self.tau_use = True
+        self.eval = True
 
         if use_cuda:
             logger.print("Let's use", torch.cuda.device_count(), "GPUs!")
@@ -113,7 +114,8 @@ class selfsupervised:
         if configs["load"]:
             self.load_model(configs["load"])
 
-        self._init_dataloaders()
+        if not eval:
+            self._init_dataloaders()
 
     def train(self):
 
@@ -542,56 +544,48 @@ class selfsupervised:
         dataset = h5py.File(demo_path, "r", swmr=True, libver="latest")
         # if self.training_type == "selfsupervised":
 
-        image = np.array(dataset["fixed_view_left"])
-        depth = np.array(dataset["fixed_view_left_depth"])
-        proprio = np.array(dataset["JointState"])
+        image = np.array(dataset["image"])
+        depth = np.array(dataset["depth_data"])
+        proprio = np.array(dataset["proprio"])
         tau = np.array(dataset["tau"])
+        action = np.array(dataset["action"])
+        flow = np.array(dataset["optical_flow"])
+        ee_yaw_next =  np.array(dataset["ee_yaw_delta"])
+        tau_ext = np.array(dataset["tau_ext"])
 
         # todo: what is action in our case
-        action = None
-        # action = np.array(dataset["action_key"])
-
-        # old
-        # image = dataset["fixed_view_left"].to(self.device)
-        # depth = dataset["fixed_view_left_depth"][dataset_index]
-        # proprio = dataset["JointState"][dataset_index][:8]
-        # tau = dataset["tau"][dataset_index]
-
         if image.shape[0] == 3:
             image = np.transpose(image, (2, 1, 0))
 
         if depth.ndim == 2:
             depth = depth.reshape((128, 128, 1))
 
-        # todo add optical flow for label to compare @philipp
-        # flow = np.array(dataset["optical_flow"][dataset_index])
-        # # this mask is showing where the sum of the flow is not zero and gets marked with a 1
-        # flow_mask = np.expand_dims(
-        #     np.where(
-        #         flow.sum(axis=2) == 0,
-        #         np.zeros_like(flow.sum(axis=2)),
-        #         np.ones_like(flow.sum(axis=2)),
-        #     ),
-        #     2,
-        # )
-
+        flow_mask = np.expand_dims(
+            np.where(
+                flow.sum(axis=2) == 0,
+                np.zeros_like(flow.sum(axis=2)),
+                np.ones_like(flow.sum(axis=2)),
+            ),
+            2,
+        )
+        print(f'Depth shape: {depth.shape}')
 
         demo = {
             "image": image,
             "depth": depth,
-            # "flow": flow,
-            # "flow_mask": flow_mask,
+            "flow": flow,
+            "flow_mask": flow_mask,
             "action": action,
             "proprio": proprio,
+            "tau": tau,
+            "tau_ext": tau_ext,
+
             # todo add ee_next if possible
             # "ee_yaw_next": dataset["proprio"][dataset_index + 1][:self.action_dim],
-            # "unpaired_image": unpaired_image,
-            # "unpaired_proprio": unpaired_proprio,
-            # "unpaired_depth": unpaired_depth,
         }
 
-        demo["tau"] = tau
-        # sample["contact_next"] = np.array([np.abs(dataset["tau_ext"][dataset_index + 1]).sum() > 7.0]).astype(
+        # demo["tau"] = tau
+        # demo["contact_next"] = np.array([np.abs(dataset["tau_ext"][dataset_index + 1]).sum() > 7.0]).astype(
         #     np.float64)
 
         dataset.close()
@@ -609,16 +603,17 @@ class selfsupervised:
 
 
         # todo what force data?
-        force = torch.from_numpy(eval_data["tau"]).to(self.device)
-        depth = torch.from_numpy(eval_data["depth"]).to(self.device)
-        proprio = torch.from_numpy(eval_data["proprio"]).to(self.device)
+        # force = torch.from_numpy(eval_data["tau"]).to(self.device)
+        depth = torch.from_numpy(eval_data["depth"]).to(self.device).transpose(1, 3).transpose(2, 3)
+        proprio = torch.from_numpy(eval_data["proprio"]).to(self.device).float()
+        force = None
 
         # extract proper action from h5 file
-        action = torch.from_numpy(eval_data["action"]).to(self.device)
-        tau = torch.from_numpy(eval_data["tau"]).to(self.device)
+        action = torch.from_numpy(eval_data["action"]).to(self.device).float()
+        tau = torch.from_numpy(eval_data["tau"]).to(self.device).float()
 
         # add aplha like in loss_calc?
-
+        print(f'Depth shape: {depth.shape}')
         # model
         if self.deterministic:
             paired_out, contact_out, flow2, optical_flow2_mask, ee_delta_out, mm_feat = self.model(
@@ -634,3 +629,16 @@ class selfsupervised:
             )
 
         # todo: log output of model and visualize
+        abs_sum = np.sum(np.abs(eval_data["tau_ext"]), axis=1)
+        contact_label = (abs_sum > 7.).astype(int).reshape(-1, 1)
+
+        with h5py.File("../scripts/eval_data.h5", 'w') as h5file:
+            h5file.create_dataset('contact_pred', data=contact_out.detach().cpu().numpy())
+            h5file.create_dataset('flow', data=eval_data["flow"])
+            h5file.create_dataset('flow_pred', data=flow2.detach().cpu().numpy())
+            h5file.create_dataset('contact_label', data=contact_label)
+            h5file.create_dataset('tau', data=eval_data['tau'])
+            h5file.create_dataset('tau_ext', data=eval_data['tau_ext'])
+
+
+

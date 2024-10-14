@@ -43,5 +43,6 @@ if __name__ == "__main__":
 
     # eval single demo file or multiple
     # todo check good demo for report etc.
-    demo_path = "/home/rickmer/Documents/Vision_Touch_pjahr/pearl_eval_data/0.h5"
+    # demo_path = "/home/rickmer/Documents/Vision_Touch_pjahr/pearl_eval_data/0.h5"
+    demo_path = "/mnt/c/Rest/Uni/14_SoSe/IRM_Prac_2/data_test/new_dataset/concat_set.h5"
     trainer.eval_demo(demo_path)

@@ -13,7 +13,7 @@ class CreateDatasetFromRecord():
         self.dataset_dir = dataset_dir
         self.recording_dir = recording_dir
 
-        self.allow_short_set = False
+        self.allow_short_set = True
         # starting index to make the frames square, goes from this index + height
         self.square_idx = 140
         # frequency which was used to collect the data
@@ -153,23 +153,42 @@ class CreateDatasetFromRecord():
                 for j in range(self.num_subfiles):
                     filename = self.dataset_name + "_" + str(i) + "_" + str(j) + "_1000.h5"
                     filepath = os.path.join(self.dataset_dir, filename)
-                    with h5py.File(filepath, 'w') as h5file:
-                        # create datasets
-                        h5file.create_dataset('proprio', data=proprio_np[start_idx + j * self.data_per_file:start_idx + (j + 1) * self.data_per_file])
-                        h5file.create_dataset('action', data=action_np[start_idx + j * self.data_per_file:start_idx + (j + 1) * self.data_per_file])
-                        h5file.create_dataset('tau', data=tau_np[start_idx + j * self.data_per_file:start_idx + (j + 1) * self.data_per_file])
-                        h5file.create_dataset('tau_ext', data=tau_ext_np[start_idx + j * self.data_per_file:start_idx + (j + 1) * self.data_per_file])
-                        h5file.create_dataset('image', data=images[j * self.data_per_file:(j+1) * self.data_per_file])
-                        h5file.create_dataset('depth_data', data=depths[j * self.data_per_file:(j+1) * self.data_per_file])
-                        h5file.create_dataset('optical_flow', data=optical_flow_np[j * self.data_per_file:(j+1) * self.data_per_file])
-                        h5file.create_dataset('joint_pos', data=joint_pos_np[start_idx + j * self.data_per_file:start_idx + (j + 1) * self.data_per_file])
-                        h5file.create_dataset('joint_vel_ori', data=joint_vel_ori_np[start_idx + j * self.data_per_file:start_idx + (j + 1) * self.data_per_file])
-                        h5file.create_dataset('ee_pos', data=ee_pos_np[start_idx + j * self.data_per_file:start_idx + (j + 1) * self.data_per_file])
-                        h5file.create_dataset('ee_ori', data=ee_ori_np[start_idx + j * self.data_per_file:start_idx + (j + 1) * self.data_per_file])
-                        h5file.create_dataset('ee_pos_vel', data=ee_vel_np[start_idx + j * self.data_per_file:start_idx + (j + 1) * self.data_per_file])
-                        h5file.create_dataset('ee_vel_ori',data=ee_vel_ori_np[start_idx + j * self.data_per_file:start_idx + (j + 1) * self.data_per_file])
-                        h5file.create_dataset('ee_yaw', data=ee_yaw_np[start_idx + j * self.data_per_file:start_idx + (j + 1) * self.data_per_file])
-                        h5file.create_dataset('ee_yaw_delta', data=ee_yaw_delta_np[start_idx + j * self.data_per_file:start_idx + (j + 1) * self.data_per_file])
+                    if self.allow_short_set:
+                        with h5py.File(filepath, 'w') as h5file:
+                            # create datasets
+                            h5file.create_dataset('proprio', data=proprio_np[j * self.data_per_file:(j + 1) * self.data_per_file])
+                            h5file.create_dataset('action', data=action_np[j * self.data_per_file:(j + 1) * self.data_per_file])
+                            h5file.create_dataset('tau', data=tau_np[j * self.data_per_file:(j + 1) * self.data_per_file])
+                            h5file.create_dataset('tau_ext', data=tau_ext_np[j * self.data_per_file:(j + 1) * self.data_per_file])
+                            h5file.create_dataset('image', data=images[j * self.data_per_file:(j+1) * self.data_per_file])
+                            h5file.create_dataset('depth_data', data=depths[j * self.data_per_file:(j+1) * self.data_per_file])
+                            h5file.create_dataset('optical_flow', data=optical_flow_np[j * self.data_per_file:(j+1) * self.data_per_file])
+                            h5file.create_dataset('joint_pos', data=joint_pos_np[j * self.data_per_file:(j + 1) * self.data_per_file])
+                            h5file.create_dataset('joint_vel_ori', data=joint_vel_ori_np[j * self.data_per_file:(j + 1) * self.data_per_file])
+                            h5file.create_dataset('ee_pos', data=ee_pos_np[j * self.data_per_file:(j + 1) * self.data_per_file])
+                            h5file.create_dataset('ee_ori', data=ee_ori_np[j * self.data_per_file:(j + 1) * self.data_per_file])
+                            h5file.create_dataset('ee_pos_vel', data=ee_vel_np[j * self.data_per_file:(j + 1) * self.data_per_file])
+                            h5file.create_dataset('ee_vel_ori',data=ee_vel_ori_np[j * self.data_per_file:(j + 1) * self.data_per_file])
+                            h5file.create_dataset('ee_yaw', data=ee_yaw_np[j * self.data_per_file:(j + 1) * self.data_per_file])
+                            h5file.create_dataset('ee_yaw_delta', data=ee_yaw_delta_np[j * self.data_per_file:(j + 1) * self.data_per_file])
+                    else:
+                        with h5py.File(filepath, 'w') as h5file:
+                            # create datasets
+                            h5file.create_dataset('proprio', data=proprio_np[start_idx + j * self.data_per_file:start_idx + (j + 1) * self.data_per_file])
+                            h5file.create_dataset('action', data=action_np[start_idx + j * self.data_per_file:start_idx + (j + 1) * self.data_per_file])
+                            h5file.create_dataset('tau', data=tau_np[start_idx + j * self.data_per_file:start_idx + (j + 1) * self.data_per_file])
+                            h5file.create_dataset('tau_ext', data=tau_ext_np[start_idx + j * self.data_per_file:start_idx + (j + 1) * self.data_per_file])
+                            h5file.create_dataset('image', data=images[j * self.data_per_file:(j+1) * self.data_per_file])
+                            h5file.create_dataset('depth_data', data=depths[j * self.data_per_file:(j+1) * self.data_per_file])
+                            h5file.create_dataset('optical_flow', data=optical_flow_np[j * self.data_per_file:(j+1) * self.data_per_file])
+                            h5file.create_dataset('joint_pos', data=joint_pos_np[start_idx + j * self.data_per_file:start_idx + (j + 1) * self.data_per_file])
+                            h5file.create_dataset('joint_vel_ori', data=joint_vel_ori_np[start_idx + j * self.data_per_file:start_idx + (j + 1) * self.data_per_file])
+                            h5file.create_dataset('ee_pos', data=ee_pos_np[start_idx + j * self.data_per_file:start_idx + (j + 1) * self.data_per_file])
+                            h5file.create_dataset('ee_ori', data=ee_ori_np[start_idx + j * self.data_per_file:start_idx + (j + 1) * self.data_per_file])
+                            h5file.create_dataset('ee_pos_vel', data=ee_vel_np[start_idx + j * self.data_per_file:start_idx + (j + 1) * self.data_per_file])
+                            h5file.create_dataset('ee_vel_ori',data=ee_vel_ori_np[start_idx + j * self.data_per_file:start_idx + (j + 1) * self.data_per_file])
+                            h5file.create_dataset('ee_yaw', data=ee_yaw_np[start_idx + j * self.data_per_file:start_idx + (j + 1) * self.data_per_file])
+                            h5file.create_dataset('ee_yaw_delta', data=ee_yaw_delta_np[start_idx + j * self.data_per_file:start_idx + (j + 1) * self.data_per_file])
 
                         # h5file.create_dataset('dataset2', data=data2, dtype='float64')
 
@@ -305,7 +324,7 @@ if __name__ == "__main__":
     if os.name == 'nt':
         print('Using Windows system')
         DATASET_DIR = r'C:\Rest\Uni\14_SoSe\IRM_Prac_2\data_test\new_dataset'
-        RECORDING_DIR = r'C:\Rest\Uni\14_SoSe\IRM_Prac_2\data_test\recordings'
+        RECORDING_DIR = r'C:\Rest\Uni\14_SoSe\IRM_Prac_2\data_test\eval'
     elif os.name == 'posix':
         print('Using Linux system')
         RECORDING_DIR = r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/recordings"

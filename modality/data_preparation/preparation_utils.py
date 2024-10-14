@@ -210,7 +210,7 @@ def list_files_in_directory(directory):
     return file_list
 
 def sort_set(dir):
-    set = '1'
+    set = '0'
     files_l = list_files_in_directory(dir)
     sorted = [''] * 20
     # print(f'This is: {np.array(files_l)}')
@@ -331,7 +331,6 @@ def own_flow(dir):
 
         steps, height, width, channels = concat_img.shape
 
-
     # print(concat_img.shape)
 
     for i in tqdm(range(concat_img.shape[0])):
@@ -366,6 +365,7 @@ def own_flow(dir):
         concat_img[i] = concat_img[i] * dark_mask_expanded
     # print(concat_img.shape)
 
+
     vid = calc_optical_flow(concat_img)
     print(vid.shape)
     print(vid[400, 60:68, 60:68, :])
@@ -376,7 +376,8 @@ def own_flow(dir):
     if os.name == 'posix':
         save_dir = r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/vid"
     elif os.name == 'nt':
-        save_dir = r"C:\Rest\Uni\14_SoSe\IRM_Prac_2\data_test\vid"
+        save_dir = r"C:\Rest\Uni\14_SoSe\IRM_Prac_2\plots\vid"
+    counter = 0
 
     # out = cv2.VideoWriter('output.mp4', cv2.VideoWriter_fourcc(*'mp4v'), fps, (size[1], size[0]), False)
     out = cv2.VideoWriter(f'{save_dir}_ownFlow.mp4', cv2.VideoWriter_fourcc(*'mp4v'), fps, (size[1], size[0]), True)
@@ -404,8 +405,11 @@ def own_flow(dir):
 
             # Convert the image back to 8-bit
             rgb = np.uint8(rgb * 255)
+            if counter == 425:
+                cv2.imwrite(r"C:\Rest\Uni\14_SoSe\IRM_Prac_2\plots\img_flow.png", rgb)
 
             out.write(rgb)
+            counter = counter + 1
     out.release()
     print(f'vid size: {vid.shape}')
 
@@ -618,11 +622,14 @@ def save_video(file):
         steps, height, width = images.shape[:3]  # channels should be 1 for single-channel images
         # assert channels == 1, "Depth images should have only one channel."
 
-        print(images[1000, 340, :])
+        # print(images[1000, 340, :])
 
         size = (width, height)
         fps = 30
-        save_dir = r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/flagsNdepth"
+        if os.name == 'posix':
+            save_dir = r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/flagsNdepth"
+        elif os.name == 'nt':
+            save_dir = r"C:\Rest\Uni\14_SoSe\IRM_Prac_2\data_test\vid"
         out = cv2.VideoWriter(f'{save_dir}_TrueVid.mp4', cv2.VideoWriter_fourcc(*'mp4v'), fps, size, isColor=color_bool)
 
         for img in images:
@@ -644,6 +651,27 @@ def save_video(file):
                 out.write(img)
 
         out.release()
+
+def concat_dataset(dir, output_file):
+    sorted = sort_set(dir)
+    i = 0
+    output_path = os.path.join(dir, output_file)
+    with h5py.File(output_path, 'w') as output_h5:
+        for i, file in enumerate(sorted):
+            with h5py.File(file, 'r') as f:
+                # Iterate through all datasets in the current .h5 file
+                for key in f.keys():
+                    # Read the dataset from the current file
+                    data = f[key][:]
+
+                    # Create or extend the dataset in the output file
+                    if key in output_h5:
+                        # Concatenate the data along the first axis if the dataset already exists
+                        output_h5[key].resize(output_h5[key].shape[0] + data.shape[0], axis=0)
+                        output_h5[key][-data.shape[0]:] = data
+                    else:
+                        # If the dataset doesn't exist, create it with maxshape set to allow resizing
+                        output_h5.create_dataset(key, data=data, maxshape=(None, *data.shape[1:]))
 
 
 
@@ -671,14 +699,19 @@ if __name__ == "__main__":
         print('Using Windows')
         files = [r"C:\Rest\Uni\14_SoSe\IRM_Prac_2\data_test\test\3.h5",
                  r"C:\Rest\Uni\14_SoSe\IRM_Prac_2\data_test\triangle_real_data\triangle_real_data",
-                 r"C:\Rest\Uni\14_SoSe\IRM_Prac_2\data_test\new_dataset"
+                 r"C:\Rest\Uni\14_SoSe\IRM_Prac_2\data_test\new_dataset",
+                 r"C:\Rest\Uni\14_SoSe\IRM_Prac_2\data_test\eval\2.h5"
                  ]
-        vid_TrueFlow(files[2])
+        # plot_tau(files[3])
+        print("plottet tau")
+        # save_video(files[3])
+        # vid_TrueFlow(files[2])
         # own_flow(r"C:\Rest\Uni\14_SoSe\IRM_Prac_2\data_test\new_dataset")
-        # own_flow(files[0])
-        concat_vid(files[2])
+        own_flow(files[3])
+        # concat_vid(files[2])
         # plot_proprio(r"C:\Rest\Uni\14_SoSe\IRM_Prac_2\data_test\triangle_real_data\triangle_real_data")
         # concat_vid(r"C:\Rest\Uni\14_SoSe\IRM_Prac_2\data_test\triangle_real_data\triangle_real_data")
+        # concat_dataset(files[2], "concat_set.h5")
     else:
         print(f'Os name not recognized: {os.name}')
 

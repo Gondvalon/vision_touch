@@ -121,7 +121,7 @@ class MultimodalManipulationDataset(Dataset):
                 "unpaired_proprio": unpaired_proprio,
                 "unpaired_depth": unpaired_depth,
             }
-            # depending if tau or force sensor is used
+            # depending on if tau or force sensor is used
             if not self.tau_use:
                 sample["force"] = force
                 sample["contact_next"] = np.array(

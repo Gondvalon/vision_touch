@@ -167,6 +167,7 @@ class SensorFusion(nn.Module):
                     dim=2,
                 )
 
+            print(f'MVECT SHAPE: {m_vect}')
             # Fuse modalities mean / variances using product of experts
             mu_z, var_z = product_of_experts(m_vect, var_vect)
 
