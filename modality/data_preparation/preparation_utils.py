@@ -627,10 +627,10 @@ def save_video(file):
     with h5py.File(file, "r") as f:
         color_bool = True
         if color_bool:
-            key = "fixed_view_left"
+            key = "image"
         else:
             key = "fixed_view_left_depth"
-        images = f[key][:]  # Assuming depth images are stored as single-channel
+        images = f[key][150:]  # Assuming depth images are stored as single-channel
 
         steps, height, width = images.shape[:3]  # channels should be 1 for single-channel images
         # assert channels == 1, "Depth images should have only one channel."
@@ -642,7 +642,7 @@ def save_video(file):
         if os.name == 'posix':
             save_dir = r"/home/philipp/Uni/14_SoSe/IRM_Prac_2/flagsNdepth"
         elif os.name == 'nt':
-            save_dir = r"C:\Rest\Uni\14_SoSe\IRM_Prac_2\data_test\vid"
+            save_dir = r"C:\Rest\Uni\14_SoSe\IRM_Prac_2\plots\vid"
         out = cv2.VideoWriter(f'{save_dir}_TrueVid.mp4', cv2.VideoWriter_fourcc(*'mp4v'), fps, size, isColor=color_bool)
 
         for img in images:
@@ -716,14 +716,15 @@ if __name__ == "__main__":
         files = [r"C:\Rest\Uni\14_SoSe\IRM_Prac_2\data_test\test\3.h5",
                  r"C:\Rest\Uni\14_SoSe\IRM_Prac_2\data_test\triangle_real_data\triangle_real_data",
                  r"C:\Rest\Uni\14_SoSe\IRM_Prac_2\data_test\new_dataset",
-                 r"C:\Rest\Uni\14_SoSe\IRM_Prac_2\data_test\eval\2.h5"
+                 r"C:\Rest\Uni\14_SoSe\IRM_Prac_2\data_test\eval\2.h5",
+                 r"C:\Rest\Uni\14_SoSe\IRM_Prac_2\data_test\new_dataset\concat_set.h5"
                  ]
         # plot_tau(files[3])
-        print("plottet tau")
         # save_video(files[3])
         # vid_TrueFlow(files[2])
         # own_flow(r"C:\Rest\Uni\14_SoSe\IRM_Prac_2\data_test\new_dataset")
-        own_flow(files[3])
+        # own_flow(files[3])
+        save_video(files[4])
         # concat_vid(files[2])
         # plot_proprio(r"C:\Rest\Uni\14_SoSe\IRM_Prac_2\data_test\triangle_real_data\triangle_real_data")
         # concat_vid(r"C:\Rest\Uni\14_SoSe\IRM_Prac_2\data_test\triangle_real_data\triangle_real_data")
